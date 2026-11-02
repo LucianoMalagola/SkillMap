@@ -56,10 +56,16 @@ def main() -> int:
     parser.add_argument("--host", default=DEFAULT_HOST)
     args = parser.parse_args()
 
-    load_dotenv()
-    api_key = os.getenv("JOOBLE_API_KEY")
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        print(f"ERROR: no .env file found at {env_path}")
+        print("Create it from .env.example (on Windows, check it isn't saved as .env.txt).")
+        return 1
+    load_dotenv(env_path)
+    api_key = os.getenv("JOOBLE_API_KEY", "").strip()
     if not api_key:
-        print("ERROR: JOOBLE_API_KEY is not set (add it to your .env file).")
+        print(f"ERROR: JOOBLE_API_KEY is empty in {env_path}")
+        print("Add a line like: JOOBLE_API_KEY=your-key  (no quotes, no spaces around '=').")
         return 1
 
     out_dir = RAW_DIR / date.today().isoformat()
