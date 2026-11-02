@@ -123,24 +123,25 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       Greenhouse `meta.total`, Lever returns everything without pagination, median description
       3.7k–6.4k chars.
 - [ ] Remotive extractor (remote postings, full descriptions).
-- [ ] **Next:** `etl/transform_load.py`. Read ATS files via each `_manifest.json`; **only deactivate
-      stale jobs for boards with status `ok` that day** (a failed fetch is not a closed job).
-      Format notes (samples in `data/raw/samples/`):
-      - Greenhouse: `content` is double-escaped HTML (`html.unescape` first).
-      - Lever: requirements often live in `lists[]` ("Who You Are"), not `descriptionPlain`;
-        concatenate description + lists + additional. `descriptionPlain` can be empty while the
-        HTML `description` is full (CSC "Seasonal Custom Boot Fitter"): fall back to stripping
-        `description`. 2 CSC postings have no text at all. Gives `workplaceType` and `country`.
-      - Ashby: `descriptionPlain`, `isRemote` (unreliable: trust `workplaceType`),
-        `secondaryLocations`, `compensation`.
-      - Bluelight posts one copy per location (612 postings, 9 titles): `etl/location.py` keeps only
-        the Costa Rica copies; still dedupe by title + description.
-      Then: HTML cleanup, title/role filter, market classification via
-      `etl/location.py` (load only in-scope postings), tool extraction via `skill_synonyms`
-      (regex with word boundaries; beware false positives like "R" and "Epic"), bilingual modality
-      classification (remote/remoto/teletrabajo, hybrid/híbrido, on-site/presencial), upsert with
-      `ON CONFLICT (source, external_id) DO UPDATE SET last_seen = now()`, deactivate stale jobs,
-      log each run in `etl_runs` incl. `jobs_excluded` and `exclusion_reasons`
+- [x] `etl/transform_load.py` (+ `etl/normalize.py`, `etl/roles.py`, `etl/skills.py`; tests in
+      `tests/test_transform.py`). Latest raw day per source; ATS via `_manifest.json` (only `ok` boards).
+      Exclusions counted once, first reason wins: `no_text` → location (`out_of_scope` /
+      `ambiguous_location`) → `title_filter` → `duplicate` (same company+title+description; smallest
+      `external_id` kept). Upsert on (source, external_id); `job_skills` replaced each run.
+      Deactivation: boards fetched OK → their jobs not loaded today; any source → not seen for 14 days
+      (Jooble isn't a full inventory). One `etl_runs` row per source, own transaction per source.
+      `--dry-run` writes nothing. Decisions:
+      - Roles are narrow (see `roles.py` docstring): no Data Scientist/Engineer, Business Analyst,
+        finance/risk/payroll/security analysts, generic Operations Analyst. Precedence BI > Reporting >
+        BizOps > Data Analyst.
+      - Tools: longest synonym first + masking ("Looker Studio" ≠ Looker; "SQL Server" ≠ SQL);
+        context rules for excel (verb), epic (EHR only), macros, pbi; standalone "R" detected in code
+        with programming context (rejects "R$", "R&D", "(R)", "Pay Grade - R").
+      - Modality: remote markets → remote; else Lever/Ashby workplaceType, then location, title, description.
+      - Salary annualised (month ×12, bi-week ×26); hourly skipped. Greenhouse from the `pay-range` block.
+      First load to `dev` (2026-11-01): **12 postings** (7 CR, 5 US-remote, 0 LATAM-remote) out of 5,417.
+      Finding: most data-analyst roles at these US companies are hybrid/on-site in hubs (Garner, Brex,
+      Mozilla Europe, GitLab Bangalore) and drop out by location; volume will come from more sources.
 - [ ] GitHub Actions daily workflow (secrets: `DATABASE_URL` for main, API keys); upload
       `data/raw/` as a compressed artifact, `retention-days: 5` (~7 MB/day zipped)
 - [ ] Data Studio dashboard (public link) + Power BI `.pbix` with "How well do I match?" page
