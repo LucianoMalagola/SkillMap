@@ -58,6 +58,9 @@ REAL_US_REMOTE = [
     ("Remote - United States or Canada", {"workplace_type": None, "is_remote": None}, US_REMOTE, "us_remote"),  # Owner
     ("NAMER", {"workplace_type": "Remote", "is_remote": True}, US_REMOTE, "us_remote"),              # Zapier
     ("NAMER | India | European Union | EMEA", {"workplace_type": "Remote", "is_remote": True}, US_REMOTE, "us_remote"),
+    # Region code after a specific place is a label, not "open to the Americas"
+    ("Remote, California, United States, AMER", {}, US_REMOTE, "us_remote"),                         # Fivetran
+    ("Remote-United-States", {}, US_REMOTE, "us_remote"),                                            # Acquia, hyphens
     # Hybrid posting that also offers a remote-US option
     ("New York, NY (HQ) | San Francisco, CA | Remote (US)", {"workplace_type": "Hybrid", "is_remote": True},
      US_REMOTE, "us_remote"),                                                                        # Ramp
@@ -109,6 +112,11 @@ REAL_OUT_OF_SCOPE = [
     ("Santa Ana, El Salvador", {"workplace_type": "remote", "country_code": "SV"}, OUT, OUT_OF_SCOPE),  # not Santa Ana CR
     ("Cartagena, Bolivar, Colombia", {"workplace_type": "remote", "country_code": "CO"}, OUT, OUT_OF_SCOPE),  # not Cartago
     ("Toronto, ON", {"workplace_type": "OnSite", "is_remote": False}, OUT, OUT_OF_SCOPE),           # ON is not a US state
+    ("Remote-Australia", {}, OUT, OUT_OF_SCOPE),                                                     # Acquia
+    # Oowlish: Brazil-only list; unrecognised cities must not trigger the description fallback
+    (["Brasília, Federal District, Brazil", "Greater Porto Alegre", "Greater Curitiba", "Salvador, Bahia",
+      "Recife, Pernambuco, Brazil", "Belo Horizonte, Minas Gerais, Brazil"],
+     {"workplace_type": "remote", "country_code": "BR"}, OUT, OUT_OF_SCOPE),
 ]
 
 
@@ -168,6 +176,7 @@ SYNTHETIC = [
     ("Remoto - Costa Rica", {}, CR, "cr_location"),
     ("Escazú, San José", {}, CR, "cr_location"),
     ("Remote - LATAM", {}, LATAM_REMOTE, "latam_region"),
+    ("Remote - US or LATAM", {}, LATAM_REMOTE, "latam_region"),                   # LATAM word is an alternative, not a label
     ("Remote (Americas)", {}, LATAM_REMOTE, "latam_region"),
     ("Remoto (Latinoamérica)", {}, LATAM_REMOTE, "latam_region"),
     ("Teletrabajo - Centroamérica", {}, LATAM_REMOTE, "latam_region"),

@@ -111,7 +111,10 @@ OTHER_CITY_RE = _words(
 # ---- regions --------------------------------------------------------------------
 LATAM_REGION_RE = _words(r"latam", r"latin america", r"latinoamerica", r"america latina",
                          r"south america", r"sudamerica", r"suramerica", r"central america",
-                         r"centroamerica", r"americas", r"amer", r"lac", r"caribbean", r"caribe")
+                         r"centroamerica", r"lac", r"caribbean", r"caribe")
+# Sales-region codes. Next to a specific place they are just labels: Fivetran's
+# "Remote, Texas, United States, AMER" is a US role, not an Americas-wide one.
+AMERICAS_CODE_RE = _words(r"americas", r"amer")
 NORTH_AMERICA_RE = _words(r"north america", r"namer", r"norteamerica", r"america del norte")
 OTHER_REGION_RE = _words(r"emea", r"international", r"europe", r"european union", r"eu", r"apac", r"asia",
                          r"asia pacific", r"africa", r"middle east", r"mena", r"oceania")
@@ -163,10 +166,11 @@ TEXT_LATAM_RE = _words(r"latam", r"latin america", r"latinoamerica", r"america l
 SPLIT_RE = re.compile(r"[;|\n]")
 
 
-def _part_geos(part: str) -> set[str]:
-    """Geography labels found in one location part."""
+def _place_geos(part: str) -> set[str]:
+    """Countries, states and cities named in one location part."""
     raw = part
-    p = _norm(part).replace("new mexico", "newmexicostate")  # keep the state away from "mexico"
+    p = _norm(part).replace("-", " ").replace("_", " ")          # "Remote-United-States"
+    p = p.replace("new mexico", "newmexicostate")                 # keep the state away from "mexico"
     geos: set[str] = set()
 
     if COSTA_RICA_RE.search(p):
@@ -184,14 +188,16 @@ def _part_geos(part: str) -> set[str]:
             geos.add(G_CR)
         elif OTHER_CITY_RE.search(p):
             geos.add(G_OTHER)
+    return geos
 
-    if NORTH_AMERICA_RE.search(p):
-        geos.add(G_US)
-    if LATAM_REGION_RE.search(p):
-        geos.add(G_LATAM_REGION)
-    if OTHER_REGION_RE.search(p):
-        geos.add(G_OTHER)
-    if WORLD_RE.search(p) and not geos:  # "Anywhere in the US" is US, not worldwide
+
+def _part_geos(part: str) -> set[str]:
+    """Geography labels found in one location part. Region codes (AMER, NAMER) count
+    only when the part names no place; explicit LATAM words always count ("Remote - US
+    or LATAM"). "Anywhere"/"Worldwide" counts only when nothing narrows it."""
+    places = _place_geos(part)
+    geos = places | _region_geos(part, include_codes=not places)
+    if not geos and WORLD_RE.search(_norm(part)):
         geos.add(G_WORLD)
     return geos
 
@@ -239,16 +245,21 @@ def _text_fallback(text: str) -> tuple[str | None, str]:
     return None, AMBIGUOUS
 
 
-def _region_geos(part: str) -> set[str]:
-    """Regions named in a location text ("Remote - LATAM", "NAMER", "EMEA")."""
+def _region_geos(part: str, include_codes: bool = True) -> set[str]:
+    """Regions named in a location text ("Remote - LATAM", "NAMER", "EMEA").
+    include_codes=False skips sales-region codes (AMER/Americas/NAMER/North America),
+    used when the same text already names a specific place."""
     p = _norm(part)
     geos = set()
-    if NORTH_AMERICA_RE.search(p):
-        geos.add(G_US)
     if LATAM_REGION_RE.search(p):
         geos.add(G_LATAM_REGION)
     if OTHER_REGION_RE.search(p):
         geos.add(G_OTHER)
+    if include_codes:
+        if AMERICAS_CODE_RE.search(p):
+            geos.add(G_LATAM_REGION)
+        if NORTH_AMERICA_RE.search(p):
+            geos.add(G_US)
     return geos
 
 
@@ -275,7 +286,7 @@ def _part_geography(text: str, country: str | None) -> set[str]:
     """
     if not country or not country.strip():
         return _part_geos(text)
-    geos = _country_geos(country) | _region_geos(text)
+    geos = _country_geos(country) | _region_geos(text, include_codes=not _place_geos(text))
     if COSTA_RICA_RE.search(_norm(text)):
         geos.add(G_CR)
     return geos
@@ -322,8 +333,10 @@ def _classify_parts(
     if G_US in remote_geos:
         return US_REMOTE, "us_remote"
 
-    if remote_without_geo or not parts:
-        # "Remote" (or nothing at all) with no country. From most to least specific:
+    if (remote_without_geo and not remote_geos) or not parts:
+        # "Remote" (or nothing at all) with no country anywhere in the location. (If other
+        # parts do name places, e.g. "Brazil | Greater Curitiba", those decide.)
+        # From most to least specific:
         # the title, then Greenhouse offices, then the description.
         by_title = _title_geography(title)
         if by_title:
