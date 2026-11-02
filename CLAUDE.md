@@ -32,6 +32,8 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - Branch `main`: production, read by dashboards. Branch `dev` (`br-polished-grass-b790an0o`): development/testing.
 - **Always develop and test against `dev`.** Only point at `main` when the pipeline is ready.
 - Schema: `sql/01_schema.sql`, seed dictionary: `sql/02_seed_skills.sql` (applied to both branches).
+  `sql/05_views_full_text.sql`: `v_skill_demand` and `v_skill_cooccurrence` use only
+  `description_is_full = TRUE` (numerator and denominator); `v_modality_mix` keeps all rows: **dev only**.
   `sql/04_seed_web_analytics.sql` (Google Analytics, Adobe Analytics, Google Tag Manager; no `gtm`
   synonym: it means go-to-market in ads): **dev only**.
   `sql/03_market_and_exclusions.sql`: **applied to `dev` only** (2026-11-01); apply to `main` when the
