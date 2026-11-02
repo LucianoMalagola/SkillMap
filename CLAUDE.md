@@ -57,6 +57,26 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - **Adzuna:** account in "Pending Activation". Free tier ~1,000 calls/month. No Costa Rica coverage.
 - **USAJOBS:** decided not to use for now.
 
+### Location scope and filtering
+- **Extract saves EVERYTHING:** the full, unfiltered API response goes to `data/raw/<source>/<date>/`.
+  That's the safety net to reprocess without spending API calls. No location filtering at extract time.
+- **Transform classifies each posting's location into a market** (`etl/location.py`):
+  - `'CR'`: located in Costa Rica (on-site, hybrid or remote).
+  - `'US-remote'`: remote postings open to US-based workers.
+  - `'LATAM-remote'`: remote postings open to Latin America / Americas / Costa Rica
+    (very relevant: Luciano is job hunting from Costa Rica).
+  - out of scope: everything else (on-site/hybrid outside CR, remote restricted to other countries).
+  - One market per posting. If several apply, precedence is **CR > LATAM-remote > US-remote**
+    (most specific location first, then "can someone in Costa Rica apply?").
+- **Load inserts ONLY in-scope postings** into Neon. Out-of-scope postings are never loaded.
+- **Ambiguous locations** (e.g. "Remote" with no country): keep only if the title/description
+  mentions US, LATAM/Latin America/Americas, or Costa Rica; otherwise exclude with reason
+  `ambiguous_location`.
+- **Each run logs exclusions** in `etl_runs` (`jobs_excluded`, `exclusion_reasons` JSONB, e.g.
+  `{"out_of_scope": 120, "ambiguous_location": 15, "title_filter": 40}`).
+- **GitHub Actions:** `data/raw/` is temporary on the runner, so the workflow uploads it as an
+  artifact (short retention) for debugging.
+
 ## Status
 - [x] Repo, README, schema, seed dictionary, Neon project + branches
 - [x] `etl/extract_jooble.py` (saves raw JSON to `data/raw/jooble/<date>/`)
@@ -66,20 +86,27 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       Workday/SuccessFactors, so they're unreachable via these APIs; the CR list is tech/nearshore.
       Only ~60 titles across all boards look like target roles: value is full descriptions, not volume.
       `market` is the company's market; big US boards also carry on-site/overseas jobs.
-- [ ] **Next:** ATS extractors (Greenhouse, Lever, Ashby) + Remotive extractor. First add
-      `sql/03_...sql` extending the `jobs.source` CHECK. Format notes (samples in `data/raw/samples/`):
+- [ ] **Next:** `sql/03_market_and_exclusions.sql` (apply to `dev` only): `jobs.market`
+      ('CR','US-remote','LATAM-remote'), `source` CHECK + greenhouse/lever/ashby,
+      `etl_runs.jobs_excluded` + `exclusion_reasons` JSONB, views grouped by market.
+- [ ] `etl/location.py`: (market, reason) classifier, EN/ES, with `tests/test_location.py`
+      built from real location strings (Jooble raw + ATS boards).
+- [ ] ATS extractors (Greenhouse, Lever, Ashby) + Remotive extractor. Save full unfiltered
+      responses to `data/raw/<source>/<date>/`. Format notes (samples in `data/raw/samples/`):
       - Greenhouse: list with `?content=true`; `content` is double-escaped HTML (`html.unescape` first).
       - Lever: requirements often live in `lists[]` ("Who You Are"), not `descriptionPlain`;
         concatenate description + lists + additional. Gives `workplaceType` and `country`.
       - Ashby: `descriptionPlain`, `isRemote`, `workplaceType`, `secondaryLocations`;
         `?includeCompensation=true` for salary.
       - Bluelight posts one copy per location (612 postings, 9 titles): dedupe by title + description.
-- [ ] `etl/transform_load.py`: HTML cleanup, title/role filter, tool extraction via `skill_synonyms`
+- [ ] `etl/transform_load.py`: HTML cleanup, title/role filter, market classification via
+      `etl/location.py` (load only in-scope postings), tool extraction via `skill_synonyms`
       (regex with word boundaries; beware false positives like "R" and "Epic"), bilingual modality
       classification (remote/remoto/teletrabajo, hybrid/híbrido, on-site/presencial), upsert with
       `ON CONFLICT (source, external_id) DO UPDATE SET last_seen = now()`, deactivate stale jobs,
-      log each run in `etl_runs`
-- [ ] GitHub Actions daily workflow (secrets: `DATABASE_URL` for main, API keys)
+      log each run in `etl_runs` incl. `jobs_excluded` and `exclusion_reasons`
+- [ ] GitHub Actions daily workflow (secrets: `DATABASE_URL` for main, API keys); upload
+      `data/raw/` as a short-retention artifact
 - [ ] Data Studio dashboard (public link) + Power BI `.pbix` with "How well do I match?" page
 - [ ] README: findings with numbers, screenshots, limitations
 
