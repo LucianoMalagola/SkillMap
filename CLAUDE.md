@@ -31,13 +31,17 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - Project `skillmap`, id `autumn-pine-31779902`, region aws-us-east-1, PostgreSQL 18.6, database `skillmap`.
 - Branch `main`: production, read by dashboards. Branch `dev` (`br-polished-grass-b790an0o`): development/testing.
 - **Always develop and test against `dev`.** Only point at `main` when the pipeline is ready.
-- Schema: `sql/01_schema.sql`, seed dictionary: `sql/02_seed_skills.sql` (already applied to both branches).
+- Schema: `sql/01_schema.sql`, seed dictionary: `sql/02_seed_skills.sql` (applied to both branches).
+  `sql/03_market_and_exclusions.sql`: **applied to `dev` only** (2026-11-01); apply to `main` when the
+  pipeline is ready. Re-runnable, single transaction.
   Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`.
-  Views: `v_skill_demand`, `v_skill_cooccurrence`, `v_modality_mix`.
-- `jobs` has `UNIQUE(source, external_id)`, `first_seen`/`last_seen`, `is_active`,
-  `description_is_full`, `modality` in ('remote','hybrid','onsite','unspecified'), `country` in ('CR','US').
-  The `source` CHECK currently allows only ('jooble','adzuna','remotive'); extend it
-  (via a new migration file, e.g. `sql/03_...sql`) when adding greenhouse/lever/ashby.
+  Views: `v_skill_demand`, `v_modality_mix` (both by `market`), `v_skill_cooccurrence`.
+- `jobs` has `UNIQUE(source, external_id)`, `first_seen`/`last_seen`, `is_active`, `description_is_full`,
+  `modality` in ('remote','hybrid','onsite','unspecified'), `market` in ('CR','US-remote','LATAM-remote')
+  NOT NULL, `source` in ('jooble','adzuna','remotive','greenhouse','lever','ashby').
+  Migration 03 **replaced `country` with `market`** (country had no honest value for LATAM-remote and
+  duplicated market otherwise; raw location text stays in `location_raw`).
+- `etl_runs` has `jobs_excluded` INT and `exclusion_reasons` JSONB (default `{}`).
 
 ## Data sources: decisions and findings
 - **Core problem:** aggregator APIs return truncated descriptions (~250–300 chars), too short
@@ -86,10 +90,9 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       Workday/SuccessFactors, so they're unreachable via these APIs; the CR list is tech/nearshore.
       Only ~60 titles across all boards look like target roles: value is full descriptions, not volume.
       `market` is the company's market; big US boards also carry on-site/overseas jobs.
-- [ ] **Next:** `sql/03_market_and_exclusions.sql` (apply to `dev` only): `jobs.market`
-      ('CR','US-remote','LATAM-remote'), `source` CHECK + greenhouse/lever/ashby,
-      `etl_runs.jobs_excluded` + `exclusion_reasons` JSONB, views grouped by market.
-- [ ] `etl/location.py`: (market, reason) classifier, EN/ES, with `tests/test_location.py`
+- [x] `sql/03_market_and_exclusions.sql` applied to `dev` (not `main`): `jobs.market` replaces
+      `country`, ATS sources allowed, `etl_runs` exclusion columns, views grouped by market.
+- [ ] **Next:** `etl/location.py`: (market, reason) classifier, EN/ES, with `tests/test_location.py`
       built from real location strings (Jooble raw + ATS boards).
 - [ ] ATS extractors (Greenhouse, Lever, Ashby) + Remotive extractor. Save full unfiltered
       responses to `data/raw/<source>/<date>/`. Format notes (samples in `data/raw/samples/`):
