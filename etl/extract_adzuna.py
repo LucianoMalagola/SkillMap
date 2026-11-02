@@ -3,14 +3,15 @@ SkillMap: extract US remote job postings from the Adzuna API.
 
 Saves each raw API response to data/raw/adzuna/<date>/<role>_p<page>.json plus a
 _manifest.json describing the queries (without credentials), so the transform step can
-be re-run without spending API calls.
+be re-run without spending API calls. Adzuna echoes the app_id inside every ad's
+redirect_url, so responses go through etl/redact.py before they are written.
 
 Targeting: Adzuna has no remote filter. Each query puts the role in the TITLE
 (title_only) and requires "remote" somewhere in the ad (what=remote); the transform
 step still classifies every posting's location (etl/location.py).
 
-Budget: the free tier is about 1,000 calls/month. Default = 4 roles x 1 page = 4 calls
-per run (~120/month if run daily). --max-calls caps a single run.
+Budget: the free tier is about 1,000 calls/month. Default = 4 roles x 2 pages = 8 calls
+per run (~240/month if run daily). --max-calls caps a single run.
 
 Adzuna descriptions are snippets (~500 chars): rows are loaded with
 description_is_full = FALSE (market volume, not tool demand).
@@ -18,7 +19,7 @@ Terms: personal/academic research use; credit "The Adzuna API" with a link
 (https://www.adzuna.com).
 
 Usage:
-    python etl/extract_adzuna.py                          # all roles, 1 page each
+    python etl/extract_adzuna.py                          # all roles, 2 pages each
     python etl/extract_adzuna.py --roles "data analyst" --pages 1
 """
 
@@ -32,6 +33,9 @@ from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from redact import redact  # noqa: E402
 
 API_URL = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
 
@@ -47,9 +51,10 @@ RAW_DIR = ROOT / "data" / "raw" / "adzuna"
 REQUEST_DELAY = 2.0
 
 
-def fetch_page(app_id: str, app_key: str, country: str, role: str, page: int, per_page: int, max_days: int) -> tuple[int, dict | None]:
-    """One search request. Returns (status_code, payload). Never raises with the URL
-    (it contains the credentials)."""
+def fetch_page(app_id: str, app_key: str, country: str, role: str, page: int, per_page: int,
+               max_days: int) -> tuple[int, dict | None, str | None]:
+    """One search request. Returns (status_code, payload, body_text). Never raises with the
+    URL (it contains the credentials)."""
     params = {
         "app_id": app_id, "app_key": app_key,
         "title_only": role, "what": "remote",
@@ -59,19 +64,19 @@ def fetch_page(app_id: str, app_key: str, country: str, role: str, page: int, pe
     try:
         response = requests.get(API_URL.format(country=country, page=page), params=params, timeout=30)
     except requests.RequestException as err:
-        return -1, {"error": type(err).__name__}
+        return -1, {"error": type(err).__name__}, None
     if response.status_code != 200:
-        return response.status_code, None
+        return response.status_code, None, None
     try:
-        return 200, response.json()
+        return 200, response.json(), response.text
     except ValueError:
-        return -2, None
+        return -2, None, None
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Extract Adzuna US remote job postings")
     parser.add_argument("--roles", nargs="+", default=DEFAULT_ROLES)
-    parser.add_argument("--pages", type=int, default=1)
+    parser.add_argument("--pages", type=int, default=2)
     parser.add_argument("--per-page", type=int, default=50)
     parser.add_argument("--max-days", type=int, default=7, help="only ads posted in the last N days")
     parser.add_argument("--country", default="us")
@@ -98,7 +103,7 @@ def main() -> int:
                 break
             if calls:
                 time.sleep(REQUEST_DELAY)
-            status, data = fetch_page(app_id, app_key, args.country, role, page, args.per_page, args.max_days)
+            status, data, body = fetch_page(app_id, app_key, args.country, role, page, args.per_page, args.max_days)
             calls += 1
             query = {"role": role, "page": page, "title_only": role, "what": "remote", "country": args.country,
                      "max_days_old": args.max_days, "results_per_page": args.per_page,
@@ -110,8 +115,10 @@ def main() -> int:
             jobs = data.get("results", [])
             total_jobs += len(jobs)
             out_file = out_dir / f"{role.replace(' ', '_')}_p{page}.json"
-            out_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            queries.append({**query, "ok": True, "file": out_file.name, "n_jobs": len(jobs), "count": data.get("count")})
+            clean_body, n_redacted = redact(body)       # app_id appears in every redirect_url
+            out_file.write_text(clean_body, encoding="utf-8")
+            queries.append({**query, "ok": True, "file": out_file.name, "n_jobs": len(jobs), "count": data.get("count"),
+                            "credentials_redacted": n_redacted})
             print(f"[{role} p{page}] {len(jobs)} jobs (count={data.get('count')}) -> {out_file.name}")
             if len(jobs) < args.per_page:
                 break          # last page for this role

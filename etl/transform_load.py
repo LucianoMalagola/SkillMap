@@ -4,11 +4,13 @@ SkillMap: transform the latest raw files and load in-scope postings into Postgre
 For each source (greenhouse, lever, ashby, jooble, adzuna, remotive):
   1. Read the latest data/raw/<source>/<date>/ (ATS: only boards marked "ok" in _manifest.json).
   2. Normalize each posting (etl/normalize.py): HTML cleanup, Lever plain-text fallback.
-  3. Exclude, counting each posting under the FIRST reason it fails:
-       no_text            no description text at all
+  3. Exclude, counting each posting under the FIRST reason it fails (in this order, so
+     the counts read as a funnel):
        out_of_scope /     location rules (etl/location.py)
        ambiguous_location
        title_filter       not a target role (etl/roles.py)
+       no_text            no description text at all
+       placeholder        "TBD" or only legal/HR boilerplate (normalize.is_placeholder)
        duplicate          same company + title + description as another posting
                           (e.g. one copy per city); the smallest external_id is kept
   4. Detect modality, extract tools (etl/skills.py, synonyms from the DB).
@@ -47,7 +49,7 @@ from psycopg.types.json import Jsonb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from location import classify_posting  # noqa: E402
-from normalize import ATS_SOURCES, detect_modality, normalize  # noqa: E402
+from normalize import ATS_SOURCES, detect_modality, is_placeholder, normalize  # noqa: E402
 from roles import classify_title  # noqa: E402
 from skills import SkillExtractor  # noqa: E402
 
@@ -124,9 +126,6 @@ def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtrac
     candidates: list[dict] = []
     for company, job in items:
         row = normalize(source, job, company)
-        if not row["description"]:
-            excluded["no_text"] += 1
-            continue
         market, location_reason = classify_posting(source, job, description=row["description"])
         if market is None:
             excluded[location_reason] += 1
@@ -134,6 +133,14 @@ def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtrac
         role = classify_title(row["title"])
         if role is None:
             excluded["title_filter"] += 1
+            continue
+        if not row["description"]:
+            excluded["no_text"] += 1
+            continue
+        # Snippet sources (Adzuna, Jooble) are short by nature: only the explicit "TBD" check.
+        if is_placeholder(row["description"]) and (row["description_is_full"] or
+                                                    row["description"].lower().startswith(("tbd", "tba"))):
+            excluded["placeholder"] += 1
             continue
         row.update(market=market, location_reason=location_reason, role_category=role,
                    modality=detect_modality(market, row["workplace_type"], row["location_raw"] or "",

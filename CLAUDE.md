@@ -63,12 +63,12 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   source, type, link, company, updated, id.
 - **Adzuna:** active (keys in `.env`). `etl/extract_adzuna.py`: US only (no Costa Rica coverage), role in
   the title (`title_only`) + `what=remote` (no remote filter exists), `max_days_old=7`, 50/page.
-  Default 4 roles × 1 page = 4 calls/run (~120/month; free tier ~1,000; `--max-calls` caps a run).
-  "data analyst" has ~680 matches/7 days: `--pages 2` would catch nearly all (~240 calls/month).
+  Default 4 roles × 2 pages (decided 2026-11-02); roles with <50 results stop after page 1, so ~6
+  calls/run (~180/month; free tier ~1,000; `--max-calls` caps a run).
   Snippets are cut at 500 chars → `description_is_full = FALSE`. Most salaries are Adzuna estimates
   (`salary_is_predicted = "1"`): only real ones are stored. **Adzuna puts the API app_id in every
-  `redirect_url` (`utm_source`)**: raw files keep it (byte-for-byte rule), the transform strips
-  `utm_*` before storing the URL. Many ads are copied per city (Eliassen: 31 copies) → `duplicate`.
+  `redirect_url` (`utm_source`)**: it is redacted before the raw file is saved, and the transform also
+  strips `utm_*` before storing the URL. Many ads are copied per city (Eliassen: 31 copies) → `duplicate`.
   Terms: personal/academic research; credit "The Adzuna API" with a link to adzuna.com.
   First run (2026-11-01): 4 calls, 130 postings → 24 loaded.
 - **USAJOBS:** decided not to use for now.
@@ -76,6 +76,9 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 ### Location scope and filtering
 - **Extract saves EVERYTHING:** the full, unfiltered API response goes to `data/raw/<source>/<date>/`.
   That's the safety net to reprocess without spending API calls. No location filtering at extract time.
+  **Only exception: credentials.** Every key-based extractor passes the body through `etl/redact.py`,
+  which replaces any `.env` key value with `[REDACTED:<NAME>]` (Adzuna echoes the app_id in every
+  `redirect_url`). Raw files become public GitHub Actions artifacts, so they must never hold a key.
 - **Transform classifies each posting's location into a market** (`etl/location.py`):
   - `'CR'`: located in Costa Rica (on-site, hybrid or remote).
   - `'US-remote'`: remote postings open to US-based workers.
@@ -148,9 +151,11 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       case filtering returns; it currently loads 0 rows.
 - [x] `etl/transform_load.py` (+ `etl/normalize.py`, `etl/roles.py`, `etl/skills.py`; tests in
       `tests/test_transform.py`). Latest raw day per source; ATS via `_manifest.json` (only `ok` boards).
-      Exclusions counted once, first reason wins: `no_text` → location (`out_of_scope` /
-      `ambiguous_location`) → `title_filter` → `duplicate` (same company+title+description; smallest
-      `external_id` kept). Upsert on (source, external_id); `job_skills` replaced each run.
+      Exclusions counted once, first reason wins, in funnel order: location (`out_of_scope` /
+      `ambiguous_location`) → `title_filter` → `no_text` → `placeholder` ("TBD" or <200 chars left after
+      removing legal/HR boilerplate, calibrated on 5,400 postings: placeholders had 3 and 24, shortest
+      real posting 316; full-text sources only) → `duplicate` (same company+title+description;
+      smallest `external_id` kept). Upsert on (source, external_id); `job_skills` replaced each run.
       Deactivation: boards fetched OK → their jobs not loaded today; any source → not seen for 14 days
       (Jooble isn't a full inventory). One `etl_runs` row per source, own transaction per source.
       `--dry-run` writes nothing. Decisions:

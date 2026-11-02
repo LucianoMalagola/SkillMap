@@ -203,3 +203,30 @@ def test_remotive_salary(salary, expected):
     n = normalize("remotive", job, "")
     assert (n["salary_min"], n["salary_max"], n["salary_currency"]) == expected
     assert n["description_is_full"] is True and n["url"].startswith("https://remotive.com/")
+
+
+# ---- placeholder postings --------------------------------------------------------------------
+from normalize import is_placeholder  # noqa: E402
+
+CM_BOILERPLATE = (
+    "Critical Mass is an equal opportunity employer.\n\n"
+    "Critical Mass uses artificial intelligence in our recruitment process to enhance job postings.\n\n"
+    "We will never ask you to send us money, technology, or anything else to work for our company.\n"
+    "If U.S. based: https://www.consumer.ftc.gov/articles/job-scams#avoid\n"
+    "If Costa Rica based: https://www.consumo.go.cr/educacion_consumidor/consejos_practicos.aspx")
+
+
+@pytest.mark.parametrize("description, expected", [
+    ("TBD\n" + CM_BOILERPLATE, True),                                         # Critical Mass, real
+    ("Project Manager profiles\n" + CM_BOILERPLATE, True),                    # Critical Mass, real
+    ("Thank you for your interest in working with us. If you would like to submit an application for a "
+     "future position, please complete the form below and attach your resume. Our recruiting team reviews "
+     "every application and will contact you when a role that matches your profile opens up. We hire for "
+     "consulting, software and support roles.", False),                       # FreeBalance-like, real-ish, 316+
+    ("Resumen General\nEl ensamblador de producción II (PBII) realiza ensamble de complejidad moderada con "
+     "supervisión mínima, siguiendo procedimientos documentados, inspecciones de calidad y registros de "
+     "producción en un ambiente de cuarto limpio. Opera equipos de manufactura y reporta desviaciones. "
+     "Requiere bachillerato y experiencia en manufactura de dispositivos médicos.", False),  # Penumbra, Spanish
+])
+def test_is_placeholder(description, expected):
+    assert is_placeholder(description) is expected

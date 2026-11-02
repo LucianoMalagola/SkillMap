@@ -42,6 +42,37 @@ def clean_html(value: str | None) -> str:
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
+# ---- placeholder postings ----------------------------------------------------------------------
+
+# Paragraphs that are legal/HR boilerplate rather than a description of the job.
+_BOILERPLATE = re.compile(
+    r"equal (?:opportunity|employment)|\beeo\b|discriminat|protected (?:veteran|class|characteristic)|"
+    r"race, colou?r|disabilit|accommodation|e-verify|background check|privacy (?:policy|notice)|"
+    r"personal (?:data|information)|\bgdpr\b|\bscam|fraud|phishing|consumer protection|artificial intelligence|"
+    r"\bai\b.{0,40}(?:recruit|hiring)|recruit\w* agenc|unsolicited|pay (?:transparency|range)|salary range|"
+    r"compensation (?:range|package)|base (?:pay|salary)|\bbenefits?\b|401\(?k|paid time off|\bpto\b|"
+    r"health insurance|we will (?:never|not) ask|greenhouse-mail|^https?://\S+$|^if [a-z. ]+ based:",
+    re.I)
+_PLACEHOLDER_START = re.compile(r"^\W*(?:tbd|tba|to be (?:determined|announced|defined)|coming soon|placeholder|"
+                                r"por definir|n/a)\b", re.I)
+# Calibrated on the 5,400 ATS postings of 2026-11-01: the two placeholders had 3 and 24
+# characters left after removing boilerplate; the shortest real posting had 316.
+PLACEHOLDER_MIN_CHARS = 200
+
+
+def substantive_text(description: str) -> str:
+    """The description without boilerplate paragraphs (EEO, privacy, scam warnings, benefits...)."""
+    paragraphs = [p.strip() for p in re.split(r"\n+", description or "") if p.strip()]
+    return " ".join(p for p in paragraphs if not _BOILERPLATE.search(p))
+
+
+def is_placeholder(description: str) -> bool:
+    """True for postings with no real job description: "TBD", or only legal/HR boilerplate."""
+    if _PLACEHOLDER_START.search(description or ""):
+        return True
+    return len(substantive_text(description)) < PLACEHOLDER_MIN_CHARS
+
+
 # ---- modality ------------------------------------------------------------------------------
 
 def _norm(text: str) -> str:

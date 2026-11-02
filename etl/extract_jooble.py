@@ -21,6 +21,9 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from redact import redact  # noqa: E402
+
 # Main Jooble domain. The country is set through the "location" field.
 # (Country subdomains such as cr.jooble.org returned 403 for this key.)
 DEFAULT_HOST = "https://jooble.org/api/"
@@ -82,7 +85,8 @@ def main() -> int:
             jobs = data.get("jobs", [])
             total_jobs += len(jobs)
             out_file = out_dir / f"{role.replace(' ', '_')}_p{page}.json"
-            out_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            clean, _ = redact(json.dumps(data, ensure_ascii=False, indent=2))   # never save a key
+            out_file.write_text(clean, encoding="utf-8")
             print(f"[{role} p{page}] {len(jobs)} jobs (totalCount={data.get('totalCount')}) -> {out_file.name}")
 
             if not jobs:
