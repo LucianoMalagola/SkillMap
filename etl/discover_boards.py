@@ -51,7 +51,7 @@ ENDPOINTS = {
 }
 GREENHOUSE_BOARD_INFO = "https://boards-api.greenhouse.io/v1/boards/{token}"
 REQUEST_DELAY = 0.5  # seconds each worker waits after a request
-# At most one request per second to any single host, whatever the number of workers
+# At most one request per second to any single platform domain, whatever the number of workers
 # (api.lever.co's robots.txt sets Crawl-delay: 1).
 MIN_INTERVAL_PER_HOST = 1.0
 MAX_ATTEMPTS = 3
@@ -72,8 +72,11 @@ _locks_guard = threading.Lock()
 
 
 def _wait_for_host(url: str) -> None:
-    """Block until MIN_INTERVAL_PER_HOST has passed since the last request to this host."""
-    host = urlsplit(url).hostname or ""
+    """Block until MIN_INTERVAL_PER_HOST has passed since the last request to this platform.
+    Keyed by registrable domain, not hostname: {company}.jobs.personio.de and
+    {company}.recruitee.com are many hostnames on one platform (Personio answered 429
+    when each subdomain was rate-limited separately)."""
+    host = ".".join((urlsplit(url).hostname or "").split(".")[-2:])
     with _locks_guard:
         lock = _host_locks.setdefault(host, threading.Lock())
     with lock:
@@ -183,7 +186,10 @@ def load_candidates(path: Path) -> list[dict]:
         rows = list(csv.DictReader(f))
     for row in rows:
         row["slugs"] = [s.strip().lower() for s in row["slugs"].split(";") if s.strip()]
-    return rows
+    # market = "excluded" keeps a researched company on record (e.g. its slug matches a
+    # different company's board, or its board has no CR/US-remote postings) without
+    # probing it again.
+    return [row for row in rows if row["market"] != "excluded"]
 
 
 def main() -> int:

@@ -148,6 +148,14 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       LATAM country is out of scope; 2+ LATAM countries or "Anywhere"/"Worldwide" → LATAM-remote;
       country-level "United States" with no remote flag → US-remote only if the description says
       remote/distributed; "Remote" + 2+ US state names in the text → US-remote.
+- [x] CR company expansion (2026-11-02): 149 more candidates from CINDE news, job fairs, the Coyol /
+      Pharmchoices medical-device directories and a CR hiring tracker; probed on the 5 allowed ATSs.
+      Confirmed 5 new CR boards, all Greenhouse: Power Digital, VML (`wundermanthompson`), Smartsheet,
+      OfficeSpace Software, Greenlight Consulting → `etl/companies.csv` = 53 boards (25 CR). Medical-device
+      and shared-services companies are on Workday/SuccessFactors (rejected) → none found. Candidates whose
+      slug hit a different company or whose board has no CR postings are kept with `market = excluded`
+      (skipped by `discover_boards.py`). Discovery rate limit is per platform domain (Personio returned 429
+      when limited per subdomain).
 - [x] Recruitee (`{co}.recruitee.com/api/offers/`) and Personio (`{co}.jobs.personio.de/xml`) supported in
       discovery, extraction and transform (`normalize.parse_board` handles every ATS format, incl.
       Personio XML). Recruitee: remote/hybrid/on_site booleans + country_code; Personio: office text only.

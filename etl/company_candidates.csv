@@ -67,3 +67,148 @@ SimSpace,CR,simspace-corporation;simspace,Cyber ranges; Costa Rica IT roles
 Scale Army,CR,scale army careers;scalearmy,LATAM remote staffing
 Newsela,CR,newsela,EdTech; remote LATAM incl. Costa Rica (analytics engineering)
 UniTriTeam,CR,unitriteam,Staffing; Costa Rica listings
+Greenlight Consulting,CR,greenlightconsulting,Greenhouse per CR hiring tracker
+OfficeSpace Software,CR,officespacesoftware,Greenhouse per CR hiring tracker
+Power Digital,CR,powerdigitalmarketing,Greenhouse per CR hiring tracker
+West Monroe,CR,westmonroe;westmonroepartners,Consulting; Greenhouse per CR hiring tracker
+Kruger NearShore (Rekluti),CR,rekluti;krugernearshore;kruger;krugercorp,Recruitee per CR hiring tracker
+Svitla Systems,CR,svitla;svitlasystems,Software dev center in CR
+Feuji,CR,feuji;feujiinc,CINDE 2026: 150 jobs (ops/finance/HR/tech)
+Duracell,CR,duracell,CINDE: global services center
+Huntsman,CR,huntsman,CINDE: Heredia (logistics/AI/supply chain)
+Align Technology,CR,aligntech;aligntechnology;align,Med device + services; job fairs
+Bill Gosling Outsourcing,CR,billgosling;billgoslingoutsourcing,BPO; Flores job fair
+Kyndryl,CR,kyndryl,IT services; job fair
+Concentrix,CR,concentrix,BPO; job fair
+Deloitte,CR,deloitte;deloitteglobal,Shared services; job fairs
+Foundever,CR,foundever;sitel,BPO Heredia
+Teleperformance,excluded,teleperformance,"BPO; EXCLUDED 2026-11-02: slug on Recruitee: small board, no CR postings"
+TTEC,CR,ttec,BPO
+Sutherland,CR,sutherland;sutherlandglobal,BPO
+Startek,CR,startek,BPO
+Accenture,excluded,accenture,"Services; EXCLUDED 2026-11-02: slug 'accenture' on Recruitee is a different/small board, no CR postings"
+Equifax,CR,equifax,Shared services
+Experian,CR,experian,Shared services
+TransUnion,CR,transunion,Shared services
+Fiserv,CR,fiserv,Shared services
+Western Union,excluded,westernunion,Shared services; EXCLUDED 2026-11-02: Greenhouse board has no CR postings
+Moody's,CR,moodys,Shared services
+S&P Global,CR,spglobal,Shared services
+Gartner,CR,gartner,Shared services
+Akamai,CR,akamai,Tech hub
+Emerson,CR,emerson,Shared services
+Cargill,CR,cargill,Shared services
+Chiquita,CR,chiquita,Shared services
+Kimberly-Clark,CR,kimberlyclark,Shared services
+Avery Dennison,CR,averydennison,Shared services
+NTT Data,CR,nttdata,IT services
+Globant,CR,globant,IT services
+Synopsys,CR,synopsys,Tech
+Establishment Labs,CR,establishmentlabs;establishment,Med device HQ in CR
+Nevro,CR,nevro,Med device Coyol
+Shockwave Medical,CR,shockwavemedical;shockwave,Med device Coyol
+Resonetics,CR,resonetics,Med device Coyol
+Confluent Medical,CR,confluentmedical;confluent,Med device Coyol
+Cirtec Medical,CR,cirtec;cirtecmedical,Med device Coyol
+Switchback Medical,CR,switchbackmedical;switchback,Med device Coyol
+Biomerics,CR,biomerics,Med device
+Nextern,CR,nextern,Med device
+Spectrum Plastics Group,CR,spectrumplastics;spectrumplasticsgroup,Med device
+Viant Medical,CR,viant;viantmedical,Med device
+MicroVention,CR,microvention,Med device (Terumo)
+Theragenics,CR,theragenics,Med device
+Admedes,CR,admedes,Med device
+Heraeus Medevio,CR,heraeus;heraeusmedevio,Med device
+Coloplast,CR,coloplast,Med device
+Steris,CR,steris,Med device Coyol
+Moog,CR,moog;moogmedical,Med device Coyol
+Teradyne,CR,teradyne,Electronics Coyol
+Sensient,CR,sensient,Coyol
+Cardinal Health,CR,cardinalhealth,Med device Coyol
+CooperVision,CR,coopervision;coopercompanies,Med device Coyol
+CooperSurgical,CR,coopersurgical,Med device Coyol
+Cadence Inc,CR,cadenceinc;cadencedevice,Med device Coyol
+Freudenberg Medical,CR,freudenberg;freudenbergmedical,Med device Coyol
+Tegra Medical,CR,tegramedical,Med device Heredia
+Integer,CR,integer;integertech,Med device
+Mozarc Medical,CR,mozarcmedical;mozarc,Med device Cartago (2026)
+LifeSync,CR,lifesync,Med device Cartago (2026)
+Nitinol Devices & Components,CR,nitinoldevices;ndc,Med device Cartago
+Apollo Endosurgery,CR,apolloendosurgery,Med device
+ICU Medical,CR,icumedical,Med device Heredia
+Hologic,CR,hologic,Med device Coyol
+Smith+Nephew,CR,smithnephew;smithandnephew,Med device Coyol
+Edwards Lifesciences,CR,edwards;edwardslifesciences,Med device (Workday per tracker)
+Boston Scientific,CR,bostonscientific,Med device
+Medtronic,CR,medtronic,Med device
+Abbott,CR,abbott,Med device
+Philips,CR,philips,Med device
+Baxter,CR,baxter,Med device
+Bayer,CR,bayer,Life sciences Coyol
+Roche,CR,roche,Life sciences Coyol
+Thermo Fisher,CR,thermofisher,Life sciences Coyol
+Olympus,excluded,olympus,Med device; EXCLUDED 2026-11-02: slug 'olympus' on Ashby is a different company
+TE Connectivity,CR,teconnectivity,Med device
+Coalition Technologies,CR,coalitiontechnologies,Remote LATAM (seen in round 1)
+Hangar Worldwide,CR,hangarworldwide;hangar,Software CR (BambooHR per tracker)
+Prodigious,CR,prodigious,Agency CR
+Sabre,CR,sabre,Tech
+Equinix,CR,equinix,Tech
+ServiceNow,CR,servicenow,Tech
+Workday,CR,workday,Tech (CR office)
+HP,excluded,hp;hpinc,Tech hub; EXCLUDED 2026-11-02: Greenhouse board 'hp' has no CR postings
+Intel,CR,intel,Tech hub
+Microsoft,CR,microsoft,Tech hub
+Amazon,excluded,amazon,Tech hub; EXCLUDED 2026-11-02: slug 'amazon' on Personio is a different company
+Oracle,CR,oracle,Tech hub
+VMware,CR,vmware,Tech hub
+Dell,CR,dell;delltechnologies,Tech
+IBM,CR,ibm,Tech
+Pfizer,CR,pfizer,Shared services
+Procter & Gamble,CR,pg;proctergamble,Shared services
+Walmart,CR,walmart,Shared services
+Citi,CR,citi,Shared services
+Bank of America,CR,bankofamerica,Shared services
+Heineken,CR,heineken,Job fair
+BAC Credomatic,CR,baccredomatic;bac,Bank; job fair
+Grupo Purdy,CR,grupopurdy;purdy,CR company
+Florida Ice & Farm (FIFCO),CR,fifco,CR company
+Dos Pinos,CR,dospinos,CR company
+Hipotecaria / Davivienda,CR,davivienda,Bank
+Garnier BBDO,CR,garnierbbdo;garnier,Agency CR
+VML,CR,wundermanthompson,"Agency (VML, formerly Wunderman Thompson); CR postings; Greenhouse board 'wundermanthompson'"
+Sykes,CR,sykes,BPO
+Ryan LLC,CR,ryan;ryanllc,Tax services CR
+Trimble,CR,trimble,Tech CR?
+Smartsheet,CR,smartsheet,Tech
+Hootsuite,excluded,hootsuite,Tech; EXCLUDED 2026-11-02: Greenhouse board has no CR postings
+Twilio,excluded,twilio,Tech; EXCLUDED 2026-11-02: Greenhouse board has no CR postings
+Okta,excluded,okta,Tech; EXCLUDED 2026-11-02: Greenhouse board has no CR postings
+Applied Materials,CR,appliedmaterials,Tech
+Lam Research,CR,lamresearch,Tech
+NVIDIA,CR,nvidia,Tech
+AgileThought,CR,agilethought,Nearshore (Mexico/CR)
+Tiempo Development,CR,tiempodev;tiempodevelopment,Nearshore
+Isthmus Software,CR,isthmus;isthmussoftware,CR software company
+Pernix Solutions,CR,pernix;pernixsolutions,CR software company
+Sophos Solutions,CR,sophossolutions,Nearshore
+Fair Play Labs,CR,fairplaylabs,CR game studio
+Inova Software,CR,inovasoftware;inova,CR software
+Avalith,CR,avalith,Nearshore LATAM
+Fusemachines,CR,fusemachines,AI services LATAM
+Intellectsoft,CR,intellectsoft,Nearshore
+Talent Hub CR,CR,talenthub,CR staffing
+Payoneer,excluded,payoneer,Fintech; EXCLUDED 2026-11-02: Greenhouse board has no CR postings
+Zendesk,CR,zendesk,Tech
+Coursera,excluded,coursera,Tech; EXCLUDED 2026-11-02: Greenhouse board has no CR postings
+Procore,CR,procore;procoretechnologies,Tech
+TaskUs,CR,taskus,BPO
+Vacasa,CR,vacasa,Hospitality tech (CR ops)
+Bandwidth,excluded,bandwidth,Tech; EXCLUDED 2026-11-02: Greenhouse board has no CR postings
+Teladoc Health,CR,teladoc;teladochealth,Healthcare
+Optum,CR,optum,Healthcare services
+Datadog,excluded,datadog,Tech; EXCLUDED 2026-11-02: Greenhouse board has no CR postings
+Paysafe,CR,paysafe,Fintech
+Nuvei,CR,nuvei,Fintech
+Fortinet,CR,fortinet,Tech
+Rokt,CR,rokt,Tech
