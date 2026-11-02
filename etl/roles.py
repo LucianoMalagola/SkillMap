@@ -38,6 +38,27 @@ ANALYTICS_INSIGHTS = "Analytics & Insights"
 ROLES = (DATA_ANALYST, BI_ANALYST, DATA_REPORTING, BIZOPS_ANALYST, MARKETING_ANALYST, BUSINESS_ANALYST,
          ANALYTICS_INSIGHTS)
 
+# Role families (decided 2026-11-02): dashboards group related roles when single categories
+# have too few postings. Marketing Science titles stay under Marketing Analyst.
+# Mirrored in the role_families table (sql/08); transform_load refuses to run if they differ.
+DATA_ANALYTICS = "Data & Analytics"
+MARKETING_INSIGHTS = "Marketing & Insights"
+BUSINESS_OPERATIONS = "Business & Operations"
+ROLE_FAMILIES: dict[str, str] = {
+    DATA_ANALYST: DATA_ANALYTICS,
+    BI_ANALYST: DATA_ANALYTICS,
+    DATA_REPORTING: DATA_ANALYTICS,
+    ANALYTICS_INSIGHTS: DATA_ANALYTICS,
+    MARKETING_ANALYST: MARKETING_INSIGHTS,
+    BIZOPS_ANALYST: BUSINESS_OPERATIONS,
+    BUSINESS_ANALYST: BUSINESS_OPERATIONS,
+}
+
+
+def role_family(role_category: str) -> str:
+    """'BI Analyst' -> 'Data & Analytics'. Raises KeyError for an unknown category."""
+    return ROLE_FAMILIES[role_category]
+
 _SENIORITY = r"(?:(?:senior|sr|junior|jr|lead|staff|principal|associate|entry level|mid level|i|ii|iii|iv|1|2|3)\s+)*"
 _ANALYST = r"(?:analyst|analista)"
 

@@ -56,7 +56,7 @@ from psycopg.types.json import Jsonb
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from location import classify_group, classify_posting  # noqa: E402
 from normalize import ATS_SOURCES, detect_modality, is_placeholder, normalize, parse_board  # noqa: E402
-from roles import classify_title  # noqa: E402
+from roles import ROLE_FAMILIES, classify_title  # noqa: E402
 from skills import SkillExtractor  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -184,7 +184,8 @@ def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtrac
         if len(location_raw) > MAX_LOCATION_RAW:
             location_raw = location_raw[:MAX_LOCATION_RAW].rsplit(" | ", 1)[0] + f" | (+{n} copies in total)"
         row = dict(row, location_raw=location_raw)
-        row.update(market=market, location_reason=location_reason, role_category=role, copies=n,
+        row.update(market=market, location_reason=location_reason, role_category=role,
+                   role_family=ROLE_FAMILIES[role], copies=n,
                    modality=detect_modality(market, row["workplace_type"], row["location_raw"] or "",
                                             row["title"], description),
                    skills=sorted(extractor.extract(f"{row['title']}\n{description}")))
@@ -195,14 +196,15 @@ def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtrac
 # ---- load -------------------------------------------------------------------------------------
 
 UPSERT_SQL = """
-INSERT INTO jobs (source, external_id, title, company, location_raw, market, modality, role_category,
+INSERT INTO jobs (source, external_id, title, company, location_raw, market, modality, role_category, role_family,
                   salary_min, salary_max, salary_currency, description, description_is_full, url, posted_at)
 VALUES (%(source)s, %(external_id)s, %(title)s, %(company)s, %(location_raw)s, %(market)s, %(modality)s,
-        %(role_category)s, %(salary_min)s, %(salary_max)s, %(salary_currency)s, %(description)s,
+        %(role_category)s, %(role_family)s, %(salary_min)s, %(salary_max)s, %(salary_currency)s, %(description)s,
         %(description_is_full)s, %(url)s, %(posted_at)s)
 ON CONFLICT (source, external_id) DO UPDATE SET
     title = EXCLUDED.title, company = EXCLUDED.company, location_raw = EXCLUDED.location_raw,
     market = EXCLUDED.market, modality = EXCLUDED.modality, role_category = EXCLUDED.role_category,
+    role_family = EXCLUDED.role_family,
     salary_min = EXCLUDED.salary_min, salary_max = EXCLUDED.salary_max,
     salary_currency = EXCLUDED.salary_currency, description = EXCLUDED.description,
     description_is_full = EXCLUDED.description_is_full, url = EXCLUDED.url, posted_at = EXCLUDED.posted_at,
@@ -252,10 +254,20 @@ def start_run(conn, source: str) -> int:
     return conn.execute("INSERT INTO etl_runs (source) VALUES (%s) RETURNING run_id", (source,)).fetchone()[0]
 
 
-def finish_run(conn, run_id: int, status: str, fetched: int, new: int, excluded: Counter, error: str | None = None):
+def finish_run(conn, run_id: int, status: str, fetched: int, new: int, excluded: Counter, error: str | None = None,
+               loaded: int = 0):
     conn.execute("""UPDATE etl_runs SET finished_at = now(), status = %s, jobs_fetched = %s, jobs_new = %s,
-                    jobs_excluded = %s, exclusion_reasons = %s, error_message = %s WHERE run_id = %s""",
-                 (status, fetched, new, sum(excluded.values()), Jsonb(dict(excluded)), error, run_id))
+                    jobs_loaded = %s, jobs_excluded = %s, exclusion_reasons = %s, error_message = %s
+                    WHERE run_id = %s""",
+                 (status, fetched, new, loaded, sum(excluded.values()), Jsonb(dict(excluded)), error, run_id))
+
+
+def check_role_families(conn) -> None:
+    """roles.ROLE_FAMILIES must match the role_families table (the jobs FK enforces the pair)."""
+    db = dict(conn.execute("SELECT role_category, role_family FROM role_families").fetchall())
+    if db != ROLE_FAMILIES:
+        raise RuntimeError(f"etl/roles.py ROLE_FAMILIES and the role_families table differ: "
+                           f"code={ROLE_FAMILIES} db={db}. Add a migration that updates role_families.")
 
 
 # ---- main ----------------------------------------------------------------------------------------
@@ -280,6 +292,7 @@ def main() -> int:
                                         JOIN skills s USING (skill_id)""").fetchall())
         skill_ids = dict(conn.execute("SELECT skill_name, skill_id FROM skills").fetchall())
         extractor = SkillExtractor(synonyms)
+        check_role_families(conn)
 
         for source in args.sources:
             day_dir = latest_day_dir(source, args.date)
@@ -298,7 +311,7 @@ def main() -> int:
             run_id = start_run(conn, source)
             try:
                 stats = load(conn, source, rows, ok_companies, skill_ids, full_inventory, seen_ids)
-                finish_run(conn, run_id, "success", len(items), stats["new"], excluded)
+                finish_run(conn, run_id, "success", len(items), stats["new"], excluded, loaded=len(rows))
                 print(f"[{source}] loaded: {stats['new']} new, {stats['updated']} updated, "
                       f"{stats['removed']} removed (excluded by current rules), "
                       f"{stats['deactivated']} deactivated (etl_runs.run_id={run_id})")

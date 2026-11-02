@@ -10,7 +10,6 @@
 -- (309 of today's postings use "GTM", e.g. "Financial Analyst, GTM").
 -- =============================================================
 
-BEGIN;
 
 INSERT INTO skills (skill_name, category) VALUES
     ('Google Analytics',   'Web Analytics'),
@@ -32,4 +31,3 @@ FROM (VALUES
 JOIN skills s ON s.skill_name = v.skill_name
 ON CONFLICT (synonym) DO NOTHING;
 
-COMMIT;

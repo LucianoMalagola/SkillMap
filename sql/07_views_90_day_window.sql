@@ -11,7 +11,6 @@
 -- Column names carry their window (_90d / _open_now) so dashboard labels can't be mixed up.
 -- =============================================================
 
-BEGIN;
 
 DROP VIEW IF EXISTS v_skill_demand;
 DROP VIEW IF EXISTS v_skill_cooccurrence;
@@ -137,4 +136,3 @@ COMMENT ON COLUMN v_posting_counts.postings_full_text_seen_90d IS
 COMMENT ON COLUMN v_posting_counts.postings_full_text_open_now IS
   'Label: "Open postings with full description".';
 
-COMMIT;

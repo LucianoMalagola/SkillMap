@@ -3,10 +3,9 @@
 -- Run after 01_schema.sql and 02_seed_skills.sql:
 --     psql -d skillmap -f 03_market_and_exclusions.sql
 -- Safe to re-run: every step checks whether it has already been applied,
--- and the whole migration runs in one transaction (all or nothing).
+-- and etl/migrate.py runs the whole file in one transaction (all or nothing).
 -- =============================================================
 
-BEGIN;
 
 -- -------------------------------------------------------------
 -- 0. Drop the views that depend on jobs.country (recreated in step 5).
@@ -110,4 +109,3 @@ FROM jobs
 WHERE is_active
 GROUP BY market, modality;
 
-COMMIT;

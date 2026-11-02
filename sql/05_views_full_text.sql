@@ -8,7 +8,6 @@
 -- numerator AND the denominator (total_jobs). Volume views (v_modality_mix) keep all rows.
 -- =============================================================
 
-BEGIN;
 
 -- Demand for each tool by role, market and modality (active, full-description postings)
 CREATE OR REPLACE VIEW v_skill_demand AS
@@ -52,4 +51,3 @@ GROUP BY sa.skill_name, sb.skill_name;
 
 -- v_modality_mix is unchanged: it measures volume, so snippet sources stay in.
 
-COMMIT;

@@ -7,10 +7,8 @@
 -- SmartRecruiters, Workable, Breezy and BambooHR were rejected and are not added.
 -- =============================================================
 
-BEGIN;
 
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_source_check;
 ALTER TABLE jobs ADD CONSTRAINT jobs_source_check
     CHECK (source IN ('jooble', 'adzuna', 'remotive', 'greenhouse', 'lever', 'ashby', 'recruitee', 'personio'));
 
-COMMIT;

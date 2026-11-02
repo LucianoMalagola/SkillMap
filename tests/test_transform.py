@@ -317,3 +317,26 @@ def test_transform_counts_copies_once():
     assert rows[0]["external_id"] == "9"                       # the copy located in the winning market
     assert "Remote - Colombia" in rows[0]["location_raw"] and "Remote - Costa Rica" in rows[0]["location_raw"]
     assert excluded == {"duplicate": 3}
+
+
+# ---- role families ----------------------------------------------------------------------------
+
+from roles import MARKETING_INSIGHTS, ROLE_FAMILIES, ROLES, role_family  # noqa: E402
+
+
+def test_every_role_has_a_family():
+    assert set(ROLE_FAMILIES) == set(ROLES)
+
+
+@pytest.mark.parametrize("title", ["Marketing Science Analyst", "Marketing Science, Senior Analyst"])
+def test_marketing_science_stays_in_marketing(title):
+    assert classify_title(title) == MARKETING_ANALYST
+    assert role_family(classify_title(title)) == MARKETING_INSIGHTS
+
+
+def test_role_families_match_migration_08():
+    """The SQL seed of role_families must list exactly roles.ROLE_FAMILIES."""
+    import re
+    sql = (Path(__file__).resolve().parent.parent / "sql" / "08_role_families_and_analysis_views.sql").read_text()
+    seeded = dict(re.findall(r"\('([^']+)',\s+'([^']+)',\s+\d+, \d+\)", sql))
+    assert seeded == ROLE_FAMILIES
