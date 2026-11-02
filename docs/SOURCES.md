@@ -36,6 +36,25 @@ Columns: **Decision**: allowed / rejected. Dates are when the terms/robots.txt w
 | BambooHR | `{company}.bamboohr.com/careers/list` | Official API is HRIS-shaped and needs the customer's key; the careers JSON is undocumented (third-party sources say it changes without notice) | `www.bamboohr.com`: no relevant rule | **rejected** | Undocumented endpoint | 2026-11-02 |
 | Workday (`myworkdayjobs.com`) | career sites | Workday's Terms of Use prohibit data mining, robots and scraping of its Sites; no official public jobs API | `www.myworkdayjobs.com`: no robots.txt reachable (tenant hosts only) | **rejected** for automation | Terms prohibit it (decision recorded 2026-11-02) | 2026-11-02 |
 
+## Evaluated for Costa Rica coverage (job-data APIs)
+
+| Source | Access considered | Terms / docs | robots.txt (host we call) | Decision | Reason | Checked |
+|---|---|---|---|---|---|---|
+| TheirStack Jobs API | `POST api.theirstack.com/v1/jobs/search` (bearer key), filters `job_country_code_or`, `job_title_pattern_or`, `posted_at_max_age_days`, `property_exists_or` | [Terms](https://theirstack.com/en/docs/legal/terms-and-conditions) §4.3: "Reposting, redistributing, and publicly displaying job postings, including on openly accessible [websites]" is permitted (the public-display ban covers only technographic / buying-intent data, which we don't use); §4.10: aggregated statistics, indexes and graphs the user generates are the user's own, provided they don't allow reconstructing a Dataset; §4.5: downloaded materials keep identifying info that they originated with TheirStack (no explicit public-attribution clause; we credit it anyway). TheirStack says it never logs in or bypasses CAPTCHAs ([data collection](https://theirstack.com/en/docs/legal/data-collection)). **Free plan** ([plans](https://theirstack.com/en/docs/pricing/plans)): 200 API credits/month, 1 credit per job returned, max 5 pages × 25 results per search; 4 req/s, 10/min, 50/h, 400/day; credits expire after a month on the free plan. A count (`limit: 1` + `include_total_results`) costs 1 credit if anything matches; the old free preview mode (`blur_company_data`) is deprecated. `GET /v0/catalog/jobs_companies_per_job_country_code` and `GET /v0/billing/credit-balance` are free | `api.theirstack.com`: `User-agent: *` / `Allow: /` | **allowed by its terms; build pending Luciano's OK** | Documented, key-based API whose terms allow public display of postings and aggregates. **Caveat:** in a 25-posting CR sample, 17 came from LinkedIn and 5 from Indeed (as collected by TheirStack), sources we reject for direct scraping. Option under review: request only postings with a `final_url` (employer career site / ATS page) | 2026-11-02 |
+| JSearch (OpenWeb Ninja) | `GET api.openwebninja.com/jsearch/search` (`x-api-key`), `country=cr` | [Terms](https://www.openwebninja.com/terms) §2: license to "use, reproduce, and commercially exploit such API Data in your own products", but not as a standalone data product replicating the service; **"You are solely responsible for ensuring that your use… of API Data complies with… any terms that apply to the original source of such data."** Data comes from "LinkedIn, Indeed, Glassdoor, ZipRecruiter, and all public job sites via Google for Jobs" ([product page](https://www.openwebninja.com/api/jsearch)). Free Basic plan: 200 requests/month, hard limit ([RapidAPI listing](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch/details); OpenWeb Ninja's comparison page says 100), 1 request = 1 page of up to 10 jobs | `api.openwebninja.com`: no robots.txt (403 "Missing Authentication Token") | **pending: not tested** | Its own terms allow our use, but pass the original sites' terms (LinkedIn, Indeed, Google) on to us. The key returned 403 "You are not subscribed to this API" on both the OpenWeb Ninja and RapidAPI endpoints (2026-11-02), so no data was retrieved | 2026-11-02 |
+
+## Rejected: do not use
+
+Decided by Luciano 2026-11-02. These resell data scraped from sites whose terms prohibit scraping
+(LinkedIn, Indeed, Glassdoor, ZipRecruiter, Monster), so they fail the compliance rule whatever
+their own terms say.
+
+| Source | What it is | Decision | Checked |
+|---|---|---|---|
+| OpenWeb Ninja platform-specific APIs: Real-Time LinkedIn Data, Real-Time Indeed Data, Real-Time Glassdoor Data, Real-Time ZipRecruiter Data, Real-Time Monster Data | Unofficial APIs over a single job platform | **rejected** | 2026-11-02 |
+| Apify Indeed scrapers | Community actors that scrape Indeed pages | **rejected** | 2026-11-02 |
+| Coresignal | Commercial datasets/APIs of jobs and profiles collected from LinkedIn and other platforms | **rejected** | 2026-11-02 |
+
 ## Job boards and other sites
 
 | Source | Terms / docs | robots.txt | Decision | Reason | Checked |
