@@ -288,3 +288,32 @@ def test_recruitee_structured_fields():
     remote_do = {**offer, "remote": True, "hybrid": False,
                  "locations": [{"city": "Santo Domingo", "country": "Dominican Republic", "country_code": "DO"}]}
     assert classify_posting("recruitee", remote_do) == (None, "out_of_scope")   # one non-CR LATAM country
+
+
+# ---- merged per-country copies ------------------------------------------------------------------
+from location import classify_group  # noqa: E402
+
+
+def _pd_copy(job_id, country):
+    """Power Digital posts "Reporting Analyst, Consumer Services" once per country (real pattern)."""
+    return {"id": job_id, "title": "Reporting Analyst, Consumer Services",
+            "location": {"name": f"Remote - {country}"}, "offices": [],
+            "content": "&lt;p&gt;" + "Build weekly performance reports in SQL and Looker for consumer brands, "
+                       "track campaign KPIs, automate data pulls and present insights to account teams. " * 3 + "&lt;/p&gt;"}
+
+
+def test_merged_copies_pool_locations():
+    copies = [_pd_copy(1, "Colombia"), _pd_copy(2, "Mexico"), _pd_copy(3, "Ecuador"), _pd_copy(4, "Argentina")]
+    assert all(classify_posting("greenhouse", c) == (None, "out_of_scope") for c in copies)   # each alone
+    assert classify_group("greenhouse", copies) == ("LATAM-remote", "latam_multi_country")    # pooled
+
+
+def test_transform_counts_copies_once():
+    import transform_load as t
+    copies = [("Power Digital", _pd_copy(i, c)) for i, c in enumerate(["Colombia", "Mexico", "Ecuador"], 1)]
+    copies.append(("Power Digital", _pd_copy(9, "Costa Rica")))
+    rows, excluded = t.transform("greenhouse", copies, EXTRACTOR)
+    assert len(rows) == 1 and rows[0]["market"] == "CR" and rows[0]["copies"] == 4
+    assert rows[0]["external_id"] == "9"                       # the copy located in the winning market
+    assert "Remote - Colombia" in rows[0]["location_raw"] and "Remote - Costa Rica" in rows[0]["location_raw"]
+    assert excluded == {"duplicate": 3}

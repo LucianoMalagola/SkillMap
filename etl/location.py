@@ -300,7 +300,9 @@ def _classify_parts(
     is_remote: bool | None,
     fallback_parts: list[tuple[str, str | None]] | None = None,
 ) -> tuple[str | None, str]:
-    """Core rules. parts = [(location text, structured country or None), ...].
+    """Core rules. parts = [(location text, structured country or None[, remote flag]), ...].
+    The optional third element overrides the posting-level remote flag for that part (used
+    when merged copies of one job have different workplace types).
     fallback_parts (Greenhouse offices) are consulted only when the location is "Remote"
     with no geography and the title doesn't name one."""
     wt = _normalize_workplace(workplace_type)
@@ -310,11 +312,14 @@ def _classify_parts(
     remote_without_geo = False
     us_region_level_onsite = False
 
-    for part_text, country in parts:
+    for part in parts:
+        part_text, country = part[0], part[1]
+        own_remote = part[2] if len(part) > 2 else None
         geos = _part_geography(part_text, country)
         if G_CR in geos:
             return CR, "cr_location"   # highest precedence: stop here
-        part_remote = posting_remote or bool(REMOTE_RE.search(_norm(part_text)))
+        base_remote = posting_remote if own_remote is None else own_remote
+        part_remote = base_remote or bool(REMOTE_RE.search(_norm(part_text)))
         if part_remote:
             if geos:
                 remote_geos |= geos
@@ -444,28 +449,10 @@ def _ashby_country(entry: dict) -> str | None:
     return ((entry.get("address") or {}).get("postalAddress") or {}).get("addressCountry")
 
 
-def classify_posting(source: str, job: dict, description: str | None = None) -> tuple[str | None, str]:
-    """Classify one raw posting, exactly as the API returned it.
-
-    source       'greenhouse' | 'lever' | 'ashby' | 'recruitee' | 'personio' | 'jooble' | 'adzuna' | 'remotive'
-    job          one job object from the raw response
-    description  already-cleaned text (transform passes its own); computed if omitted
-
-    Structured fields are preferred where they exist:
-      Lever      workplaceType; country (applies to the primary location); allLocations
-      Ashby      workplaceType (over isRemote); addressCountry of each location
-      Greenhouse location.name is free text; `offices` is often an HQ, not where the job
-                 is (e.g. "Remote - United States" -> office "San Francisco"), so it is
-                 used only when the location is a bare "Remote" and the title names no
-                 geography (then it beats the description, which carries boilerplate).
-      Adzuna     location.area[0] is the country; remote/not from title, location, snippet
-      Jooble     free text only; remote/not from title, location, snippet
-      Remotive   always remote; candidate_required_location is the location
-      Recruitee  remote/hybrid/on_site booleans; country_code per location
-      Personio   office name(s) only (free text)
-    """
-    text = description if description is not None else posting_text(source, job)
-    title = job.get("title") or job.get("text") or ""
+def _posting_parts(source: str, job: dict, text: str) -> tuple[list[tuple], str, list[tuple]]:
+    """(parts, title, fallback_parts) for one raw posting. Each part is
+    (location text, structured country or None, remote flag or None)."""
+    title = job.get("title") or job.get("text") or job.get("name") or ""
 
     if source == "lever":
         cats = job.get("categories") or {}
@@ -473,61 +460,104 @@ def classify_posting(source: str, job: dict, description: str | None = None) -> 
         primary = cats.get("location") or (texts[0] if texts else "")
         # Lever's country belongs to the primary location; keep that one first.
         ordered = ([primary] + [t for t in texts if t != primary]) if primary else texts
-        parts = [(t, job.get("country") if i == 0 else None) for i, t in enumerate(ordered)]
-        return _classify_parts(parts, title, text, job.get("workplaceType"), None)
+        remote = _workplace_remote(job.get("workplaceType"), None)
+        return [(t, job.get("country") if i == 0 else None, remote) for i, t in enumerate(ordered)], title, []
 
     if source == "ashby":
-        parts = [(job.get("location") or "", _ashby_country(job))]
-        parts += [(s.get("location") or "", _ashby_country(s)) for s in job.get("secondaryLocations") or []]
-        parts = [(t, c) for t, c in parts if t.strip() or c]
-        return _classify_parts(parts, title, text, job.get("workplaceType"), job.get("isRemote"))
+        remote = _workplace_remote(job.get("workplaceType"), job.get("isRemote"))
+        parts = [(job.get("location") or "", _ashby_country(job), remote)]
+        parts += [(s.get("location") or "", _ashby_country(s), remote) for s in job.get("secondaryLocations") or []]
+        return [p for p in parts if p[0].strip() or p[1]], title, []
 
     if source == "greenhouse":
-        parts = [(t, None) for t in _split((job.get("location") or {}).get("name"))]
+        parts = [(t, None, None) for t in _split((job.get("location") or {}).get("name"))]
         offices = [o.get("location") or o.get("name") or "" for o in job.get("offices") or []]
-        office_parts = [(t, None) for t in offices if t.strip()]
-        return _classify_parts(parts, title, text, None, None, fallback_parts=office_parts)
+        return parts, title, [(t, None) for t in offices if t.strip()]
+
+    if source == "recruitee":
+        if job.get("hybrid"):
+            remote = False
+        elif job.get("remote") and not job.get("on_site"):
+            remote = True
+        elif job.get("on_site"):
+            remote = False
+        else:
+            remote = None
+        parts = [(loc.get("city") or loc.get("name") or "", loc.get("country_code") or loc.get("country"), remote)
+                 for loc in job.get("locations") or []]
+        if not parts:
+            parts = [(job.get("city") or job.get("location") or "", job.get("country_code") or job.get("country"), remote)]
+        return [p for p in parts if (p[0] or "").strip() or p[1]], title, []
+
+    if source == "personio":
+        offices = [job.get("office") or ""] + list(job.get("additionalOffices") or [])
+        return [(o, None, None) for o in offices if o.strip()], title, []
 
     if source == "jooble":
         location = job.get("location") or ""
-        return _classify_parts([(t, None) for t in _split(location)], title, text,
-                               _snippet_workplace(title, location, text), None)
+        remote = _snippet_workplace(title, location, text) == "remote" or None
+        return [(t, None, remote) for t in _split(location)], title, []
 
     if source == "adzuna":
-        # location.area is structured: ["US", "New York", "New York City", ...]
         loc = job.get("location") or {}
         location = loc.get("display_name") or ""
         country = (loc.get("area") or [None])[0]
-        parts = [(location, country)] if (location or country) else []
-        return _classify_parts(parts, title, text, _snippet_workplace(title, location, text), None)
-
-    if source == "recruitee":
-        # Structured: remote/hybrid/on_site booleans and a country_code per location.
-        if job.get("hybrid"):
-            workplace = "hybrid"
-        elif job.get("remote") and not job.get("on_site"):
-            workplace = "remote"
-        elif job.get("on_site"):
-            workplace = "onsite"
-        else:
-            workplace = None
-        parts = [(loc.get("city") or loc.get("name") or "", loc.get("country_code") or loc.get("country"))
-                 for loc in job.get("locations") or []]
-        if not parts:
-            parts = [(job.get("city") or job.get("location") or "", job.get("country_code") or job.get("country"))]
-        parts = [(t, c) for t, c in parts if (t or "").strip() or c]
-        return _classify_parts(parts, title or job.get("title") or "", text, workplace, None)
-
-    if source == "personio":
-        # Only free text: the office name(s), e.g. "San José" or "Remote".
-        offices = [job.get("office") or ""] + list(job.get("additionalOffices") or [])
-        title = job.get("name") or title
-        return _classify_parts([(o, None) for o in offices if o.strip()], title, text, None, None)
+        remote = _snippet_workplace(title, location, text) == "remote" or None
+        return ([(location, country, remote)] if (location or country) else []), title, []
 
     if source == "remotive":
-        # Remote-only board; candidate_required_location says who may apply
-        # ("Worldwide", "USA, Canada", "Latin America").
         location = job.get("candidate_required_location") or ""
-        return _classify_parts([(t, None) for t in _split(location)], title, text, "remote", None)
+        return [(t, None, True) for t in _split(location)], title, []
 
     raise ValueError(f"unknown source: {source}")
+
+
+def _workplace_remote(workplace_type: str | None, is_remote: bool | None) -> bool | None:
+    """Structured workplace -> remote flag for a part (None = let the text decide)."""
+    wt = _normalize_workplace(workplace_type)
+    if wt:
+        return wt == "remote"
+    return True if is_remote else None
+
+
+def classify_group(source: str, jobs: list[dict], description: str | None = None) -> tuple[str | None, str]:
+    """Classify copies of ONE job posted separately per location (same company, title and
+    description; e.g. Power Digital posts "Reporting Analyst" once each for Colombia, Mexico,
+    Ecuador and Argentina). The locations of all copies are pooled and the rules applied
+    once, so 4 single-country copies count as "2+ LATAM countries" -> LATAM-remote.
+
+    Structured fields are preferred where they exist:
+      Lever      workplaceType; country (applies to the primary location); allLocations
+      Ashby      workplaceType (over isRemote); addressCountry of each location
+      Recruitee  remote/hybrid/on_site booleans; country_code per location
+      Greenhouse location.name is free text; `offices` is often an HQ, not where the job
+                 is (e.g. "Remote - United States" -> office "San Francisco"), so it is
+                 used only when the location is a bare "Remote" and the title names no
+                 geography (then it beats the description, which carries boilerplate).
+      Personio   office name(s) only (free text)
+      Adzuna     location.area[0] is the country; remote/not from title, location, snippet
+      Jooble     free text only; remote/not from title, location, snippet
+      Remotive   always remote; candidate_required_location is the location
+    """
+    if not jobs:
+        raise ValueError("classify_group needs at least one job")
+    text = description if description is not None else posting_text(source, jobs[0])
+    parts, fallback = [], []
+    title = ""
+    for job in jobs:
+        job_parts, job_title, job_fallback = _posting_parts(source, job, text)
+        title = title or job_title
+        parts += [p for p in job_parts if p not in parts]
+        fallback += [f for f in job_fallback if f not in fallback]
+    return _classify_parts(parts, title, text, None, None, fallback_parts=fallback or None)
+
+
+def classify_posting(source: str, job: dict, description: str | None = None) -> tuple[str | None, str]:
+    """Classify one raw posting, exactly as the API returned it (a group of one).
+
+    source       'greenhouse' | 'lever' | 'ashby' | 'recruitee' | 'personio' | 'jooble' | 'adzuna' | 'remotive'
+    job          one job object from the raw response
+    description  already-cleaned text (transform passes its own); computed if omitted
+    See classify_group() for which structured fields each source contributes.
+    """
+    return classify_group(source, [job], description)

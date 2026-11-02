@@ -11,8 +11,10 @@ For each source (greenhouse, lever, ashby, jooble, adzuna, remotive):
        title_filter       not a target role (etl/roles.py)
        no_text            no description text at all
        placeholder        "TBD" or only legal/HR boilerplate (normalize.is_placeholder)
-       duplicate          same company + title + description as another posting
-                          (e.g. one copy per city); the smallest external_id is kept
+       duplicate          extra copies of one job (same company + title + description,
+                          e.g. one copy per country). Copies are merged BEFORE the location
+                          step and their locations pooled (location.classify_group), so they
+                          count as one posting.
   4. Detect modality, extract tools (etl/skills.py, synonyms from the DB).
   5. Upsert into jobs (ON CONFLICT (source, external_id)), replace job_skills.
   6. Deactivate stale jobs:
@@ -48,7 +50,7 @@ from dotenv import load_dotenv
 from psycopg.types.json import Jsonb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from location import classify_posting  # noqa: E402
+from location import classify_group, classify_posting  # noqa: E402
 from normalize import ATS_SOURCES, detect_modality, is_placeholder, normalize, parse_board  # noqa: E402
 from roles import classify_title  # noqa: E402
 from skills import SkillExtractor  # noqa: E402
@@ -122,43 +124,68 @@ def read_raw(source: str, day_dir: Path) -> tuple[list[tuple[str, dict]], list[s
 
 # ---- transform -------------------------------------------------------------------------------
 
+MAX_LOCATION_RAW = 1000   # merged copies can list dozens of cities
+
+
+def _sort_key(external_id: str):
+    """Numeric ids sort as numbers (Greenhouse, Adzuna); others as text."""
+    return (0, int(external_id), "") if external_id.isdigit() else (1, 0, external_id)
+
+
 def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtractor) -> tuple[list[dict], Counter]:
+    """Raw postings -> rows to load, plus exclusion counts by reason.
+
+    Identical copies of one job (same company + title + description, e.g. one copy per
+    country) are merged FIRST and treated as one posting: their locations are pooled for
+    the market decision (location.classify_group). Every copy is counted under the group's
+    outcome; when a group is loaded, its extra copies count as 'duplicate'.
+    """
     excluded: Counter = Counter()
-    candidates: list[dict] = []
+    groups: dict[tuple, list[tuple[dict, dict]]] = {}
     for company, job in items:
         row = normalize(source, job, company)
-        market, location_reason = classify_posting(source, job, description=row["description"])
+        key = (row["company"], row["title"].lower(), hashlib.sha1(row["description"].encode("utf-8")).hexdigest())
+        groups.setdefault(key, []).append((job, row))
+
+    rows: list[dict] = []
+    for copies in groups.values():
+        copies.sort(key=lambda c: _sort_key(c[1]["external_id"]))
+        n = len(copies)
+        description = copies[0][1]["description"]
+        market, location_reason = classify_group(source, [job for job, _ in copies], description)
         if market is None:
-            excluded[location_reason] += 1
+            excluded[location_reason] += n
             continue
-        role = classify_title(row["title"])
+        role = classify_title(copies[0][1]["title"])
         if role is None:
-            excluded["title_filter"] += 1
+            excluded["title_filter"] += n
             continue
-        if not row["description"]:
-            excluded["no_text"] += 1
+        if not description:
+            excluded["no_text"] += n
             continue
         # Snippet sources (Adzuna, Jooble) are short by nature: only the explicit "TBD" check.
-        if is_placeholder(row["description"]) and (row["description_is_full"] or
-                                                    row["description"].lower().startswith(("tbd", "tba"))):
-            excluded["placeholder"] += 1
+        if is_placeholder(description) and (copies[0][1]["description_is_full"] or
+                                            description.lower().startswith(("tbd", "tba"))):
+            excluded["placeholder"] += n
             continue
-        row.update(market=market, location_reason=location_reason, role_category=role,
-                   modality=detect_modality(market, row["workplace_type"], row["location_raw"] or "",
-                                            row["title"], row["description"]),
-                   skills=sorted(extractor.extract(f"{row['title']}\n{row['description']}")))
-        candidates.append(row)
+        if n > 1:
+            excluded["duplicate"] += n - 1
 
-    # Duplicates: same company + title + description. Keep the smallest external_id so the
-    # same copy survives from day to day.
-    kept: dict[tuple, dict] = {}
-    for row in sorted(candidates, key=lambda r: r["external_id"]):
-        key = (row["company"], row["title"].lower(), hashlib.sha1(row["description"].encode("utf-8")).hexdigest())
-        if key in kept:
-            excluded["duplicate"] += 1
-        else:
-            kept[key] = row
-    return list(kept.values()), excluded
+        # Store the copy whose own location matches the group's market (e.g. the San José
+        # copy of a CR group), so the URL points to a relevant page; ties -> smallest id.
+        row = next((r for job, r in copies if n == 1 or classify_posting(source, job, description)[0] == market),
+                   copies[0][1])
+        locations = list(dict.fromkeys(r["location_raw"] for _, r in copies if r["location_raw"]))
+        location_raw = " | ".join(locations)
+        if len(location_raw) > MAX_LOCATION_RAW:
+            location_raw = location_raw[:MAX_LOCATION_RAW].rsplit(" | ", 1)[0] + f" | (+{n} copies in total)"
+        row = dict(row, location_raw=location_raw)
+        row.update(market=market, location_reason=location_reason, role_category=role, copies=n,
+                   modality=detect_modality(market, row["workplace_type"], row["location_raw"] or "",
+                                            row["title"], description),
+                   skills=sorted(extractor.extract(f"{row['title']}\n{description}")))
+        rows.append(row)
+    return rows, excluded
 
 
 # ---- load -------------------------------------------------------------------------------------
