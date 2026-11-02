@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 
-SECRET_ENV_VARS = ("ADZUNA_APP_ID", "ADZUNA_APP_KEY", "JOOBLE_API_KEY")
+SECRET_ENV_VARS = ("ADZUNA_APP_ID", "ADZUNA_APP_KEY", "JOOBLE_API_KEY", "THEIRSTACK_API_KEY")
 MIN_SECRET_LENGTH = 6   # never "redact" something so short it could match ordinary text
 
 

@@ -426,6 +426,8 @@ def posting_text(source: str, job: dict) -> str:
         return " ".join(_strip_html(job.get(k)) for k in ("description", "requirements")).strip()
     if source == "personio":
         return " ".join(f"{d.get('name', '')}: {_strip_html(d.get('value'))}" for d in job.get("jobDescriptions") or [])
+    if source == "theirstack":
+        return re.sub(r"\s+", " ", job.get("description") or "").strip()
     raise ValueError(f"unknown source: {source}")
 
 
@@ -451,7 +453,7 @@ def _ashby_country(entry: dict) -> str | None:
 def _posting_parts(source: str, job: dict, text: str) -> tuple[list[tuple], str, list[tuple]]:
     """(parts, title, fallback_parts) for one raw posting. Each part is
     (location text, structured country or None, remote flag or None)."""
-    title = job.get("title") or job.get("text") or job.get("name") or ""
+    title = job.get("title") or job.get("text") or job.get("name") or job.get("job_title") or ""
 
     if source == "lever":
         cats = job.get("categories") or {}
@@ -508,6 +510,16 @@ def _posting_parts(source: str, job: dict, text: str) -> tuple[list[tuple], str,
         location = job.get("candidate_required_location") or ""
         return [(t, None, True) for t in _split(location)], title, []
 
+    if source == "theirstack":
+        # Structured: country_code per normalised location, remote / hybrid booleans
+        # (neither = not stated, so the text decides).
+        remote = True if job.get("remote") else (False if job.get("hybrid") else None)
+        parts = [(loc.get("display_name") or loc.get("name") or "", loc.get("country_code"), remote)
+                 for loc in job.get("locations") or []]
+        if not parts:
+            parts = [(job.get("long_location") or job.get("location") or "", job.get("country_code"), remote)]
+        return [p for p in parts if (p[0] or "").strip() or p[1]], title, []
+
     raise ValueError(f"unknown source: {source}")
 
 
@@ -537,6 +549,7 @@ def classify_group(source: str, jobs: list[dict], description: str | None = None
       Adzuna     location.area[0] is the country; remote/not from title, location, snippet
       Jooble     free text only; remote/not from title, location, snippet
       Remotive   always remote; candidate_required_location is the location
+      TheirStack country_code per normalised location; remote / hybrid booleans
     """
     if not jobs:
         raise ValueError("classify_group needs at least one job")
@@ -554,7 +567,8 @@ def classify_group(source: str, jobs: list[dict], description: str | None = None
 def classify_posting(source: str, job: dict, description: str | None = None) -> tuple[str | None, str]:
     """Classify one raw posting, exactly as the API returned it (a group of one).
 
-    source       'greenhouse' | 'lever' | 'ashby' | 'recruitee' | 'personio' | 'jooble' | 'adzuna' | 'remotive'
+    source       'greenhouse' | 'lever' | 'ashby' | 'recruitee' | 'personio' | 'jooble' | 'adzuna' | 'remotive' |
+                 'theirstack'
     job          one job object from the raw response
     description  already-cleaned text (transform passes its own); computed if omitted
     See classify_group() for which structured fields each source contributes.

@@ -1,7 +1,7 @@
 """
 SkillMap: transform the latest raw files and load in-scope postings into PostgreSQL.
 
-For each source (greenhouse, lever, ashby, jooble, adzuna, remotive):
+For each source (ATS boards, jooble, adzuna, remotive, theirstack):
   1. Read the latest data/raw/<source>/<date>/ (ATS: only boards marked "ok" in _manifest.json).
   2. Normalize each posting (etl/normalize.py): HTML cleanup, Lever plain-text fallback.
   3. Exclude, counting each posting under the FIRST reason it fails (in this order, so
@@ -15,6 +15,13 @@ For each source (greenhouse, lever, ashby, jooble, adzuna, remotive):
                           e.g. one copy per country). Copies are merged BEFORE the location
                           step and their locations pooled (location.classify_group), so they
                           count as one posting.
+       duplicate_ats      (aggregators: jooble, adzuna, remotive, theirstack) the same
+                          posting is on an ATS board we track: the ATS copy is kept, the
+                          aggregator copy is not loaded. Same posting = the aggregator's
+                          link carries the ATS posting id (e.g. ?gh_jid=...), or the same
+                          normalised company + title (normalize.match_key) among ATS
+                          postings seen in the last 90 days. After every load, aggregator
+                          rows that an ATS board has since picked up are removed too.
   4. Detect modality, extract tools (etl/skills.py, synonyms from the DB).
   5. Upsert into jobs (ON CONFLICT (source, external_id)), replace job_skills.
   6. Remove rows that today's rules exclude: a posting still present in today's raw data
@@ -26,7 +33,11 @@ For each source (greenhouse, lever, ashby, jooble, adzuna, remotive):
          active jobs not loaded today
        - any source: jobs not seen for STALE_DAYS (covers Jooble, whose search results
          aren't a full inventory, and boards removed from companies.csv)
-  8. Log one etl_runs row per source with exclusion counts by reason.
+       - TheirStack is fetched incrementally (each posting once), so its rows take
+         first_seen from TheirStack's discovered_at and, if TheirStack reports the posting
+         closed (closed_at), last_seen = closed_at and is_active = FALSE.
+  8. Log one etl_runs row per source with exclusion counts by reason (and, for TheirStack,
+     the credits the extraction spent: etl_runs.api_units_used).
 
 Each source loads in its own transaction: a failure rolls back that source only and
 marks its etl_runs row 'failed'.
@@ -48,6 +59,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import psycopg
 from dotenv import load_dotenv
@@ -55,13 +67,25 @@ from psycopg.types.json import Jsonb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from location import classify_group, classify_posting
-from normalize import ATS_SOURCES, detect_modality, is_placeholder, normalize, parse_board
+from normalize import (
+    AGGREGATOR_SOURCES,
+    ATS_SOURCES,
+    ats_refs,
+    detect_modality,
+    is_placeholder,
+    match_key,
+    normalize,
+    parse_board,
+)
 from roles import ROLE_FAMILIES, classify_title
 from skills import SkillExtractor
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"
-SOURCES = ("greenhouse", "lever", "ashby", "recruitee", "personio", "jooble", "adzuna", "remotive")
+# ATS boards first: aggregator copies are checked against them (duplicate_ats)
+SOURCES = ("greenhouse", "lever", "ashby", "recruitee", "personio", "jooble", "adzuna", "remotive", "theirstack")
+MANIFEST_SOURCES = ATS_SOURCES + ("remotive", "theirstack")
+ATS_MATCH_DAYS = 90
 STALE_DAYS = 14
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -76,7 +100,7 @@ def latest_day_dir(source: str, day: str | None) -> Path | None:
         candidate = base / day
         return candidate if candidate.is_dir() else None
     days = sorted(d for d in base.iterdir() if d.is_dir() and DAY_RE.match(d.name)
-                  and (source not in ATS_SOURCES + ("remotive",) or (d / "_manifest.json").exists()))
+                  and (source not in MANIFEST_SOURCES or (d / "_manifest.json").exists()))
     return days[-1] if days else None
 
 
@@ -112,6 +136,19 @@ def read_raw(source: str, day_dir: Path) -> tuple[list[tuple[str, dict]], list[s
                     items.append(("", job))
         return items, None, failed, failed == 0 and bool(manifest["categories"])
 
+    if source == "theirstack":
+        # One file per query page; incremental (new postings only), never a full inventory.
+        manifest = json.loads((day_dir / "_manifest.json").read_text(encoding="utf-8"))
+        items, seen, failed = [], set(), 0
+        for entry in manifest["queries"]:
+            failed += entry["status"] == "error"
+            for name in entry["files"]:
+                for job in json.loads((day_dir / name).read_text(encoding="utf-8"))["data"]:
+                    if str(job["id"]) not in seen:
+                        seen.add(str(job["id"]))
+                        items.append(("", job))
+        return items, None, failed, False
+
     # Search APIs (Jooble, Adzuna): one file per query; the same posting can come back in
     # several queries. Results aren't a full inventory, so no per-board deactivation.
     list_key = {"jooble": "jobs", "adzuna": "results"}[source]
@@ -136,6 +173,45 @@ def _sort_key(external_id: str):
     return (0, int(external_id), "") if external_id.isdigit() else (1, 0, external_id)
 
 
+_REQUISITION = re.compile(r"(?<!\d)\d{6,}(?!\d)")
+
+
+def _requisition_numbers(url: str | None) -> set[str]:
+    """6+ digit runs in a link's path: the employer's requisition number
+    ('.../Business-Operations-Analyst_1209477-1', '.../HPE1US1209477EXTERNALENUS/...')."""
+    path = urlsplit(url or "").path
+    return set(_REQUISITION.findall(path))
+
+
+def merge_listing_copies(groups: dict[tuple, list]) -> dict[tuple, list]:
+    """TheirStack lists one posting once per site it was found on (e.g. HPE requisition
+    1209477: three Workday career sites + careers.hpe.com, under four company spellings).
+    Merge groups with the same title that share the description text or a requisition
+    number in the link. Union-find over those keys."""
+    keys = list(groups)
+    parent = list(range(len(keys)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    owner: dict[tuple, int] = {}
+    for i, key in enumerate(keys):
+        _, title, description_hash = key
+        links = set(("req", title, n) for _, row in groups[key] for n in _requisition_numbers(row["url"]))
+        for link in links | {("text", title, description_hash)}:
+            if link in owner:
+                parent[find(i)] = find(owner[link])
+            else:
+                owner[link] = i
+    merged: dict[tuple, list] = {}
+    for i, key in enumerate(keys):
+        merged.setdefault(keys[find(i)], []).extend(groups[key])
+    return merged
+
+
 def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtractor) -> tuple[list[dict], Counter]:
     """Raw postings -> rows to load, plus exclusion counts by reason.
 
@@ -148,12 +224,19 @@ def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtrac
     groups: dict[tuple, list[tuple[dict, dict]]] = {}
     for company, job in items:
         row = normalize(source, job, company)
+        row["ats_refs"] = ats_refs(row["url"], job.get("final_url"), job.get("source_url"), job.get("url"))
+        if source == "theirstack":
+            row["discovered_at"] = job.get("discovered_at")
+            row["closed_at"] = job.get("closed_at")
         key = (row["company"], row["title"].lower(), hashlib.sha1(row["description"].encode("utf-8")).hexdigest())
         groups.setdefault(key, []).append((job, row))
+    if source == "theirstack":
+        groups = merge_listing_copies(groups)
 
     rows: list[dict] = []
     for copies in groups.values():
-        copies.sort(key=lambda c: _sort_key(c[1]["external_id"]))
+        copies.sort(key=lambda c: (source == "theirstack" and not c[0].get("company_domain"),
+                                   _sort_key(c[1]["external_id"])))
         n = len(copies)
         description = copies[0][1]["description"]
         market, location_reason = classify_group(source, [job for job, _ in copies], description)
@@ -184,6 +267,10 @@ def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtrac
         if len(location_raw) > MAX_LOCATION_RAW:
             location_raw = location_raw[:MAX_LOCATION_RAW].rsplit(" | ", 1)[0] + f" | (+{n} copies in total)"
         row = dict(row, location_raw=location_raw)
+        if source == "theirstack":   # merged listings: first discovery; open while any copy is open
+            row["discovered_at"] = min((r["discovered_at"] for _, r in copies if r.get("discovered_at")), default=None)
+            closed = [r.get("closed_at") for _, r in copies]
+            row["closed_at"] = None if None in closed else max(closed)
         row.update(market=market, location_reason=location_reason, role_category=role,
                    role_family=ROLE_FAMILIES[role], copies=n,
                    modality=detect_modality(market, row["workplace_type"], row["location_raw"] or "",
@@ -191,6 +278,46 @@ def transform(source: str, items: list[tuple[str, dict]], extractor: SkillExtrac
                    skills=sorted(extractor.extract(f"{row['title']}\n{description}")))
         rows.append(row)
     return rows, excluded
+
+
+# ---- cross-source deduplication -------------------------------------------------------------
+
+def ats_index(conn: psycopg.Connection) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    """(ATS (source, external_id) pairs, ATS match_keys) of ATS postings seen in the last
+    ATS_MATCH_DAYS days: what an aggregator copy is compared against."""
+    rows = conn.execute("""SELECT source, external_id, company, title FROM jobs
+                           WHERE source = ANY(%s) AND last_seen >= now() - make_interval(days => %s)""",
+                        (list(ATS_SOURCES), ATS_MATCH_DAYS)).fetchall()
+    return {(s, e) for s, e, _, _ in rows}, {match_key(c, t) for _, _, c, t in rows}
+
+
+def is_ats_copy(row: dict, ids: set[tuple[str, str]], keys: set[tuple[str, str]]) -> bool:
+    return bool(row.get("ats_refs", set()) & ids) or match_key(row["company"], row["title"]) in keys
+
+
+def drop_ats_copies(source: str, rows: list[dict], excluded: Counter,
+                    ids: set[tuple[str, str]], keys: set[tuple[str, str]]) -> list[dict]:
+    """Aggregator rows that are the same posting as an ATS row: not loaded, counted as
+    'duplicate_ats' (the ATS copy has the full, first-hand description)."""
+    if source not in AGGREGATOR_SOURCES:
+        return rows
+    kept = [r for r in rows if not is_ats_copy(r, ids, keys)]
+    if len(kept) < len(rows):
+        excluded["duplicate_ats"] += len(rows) - len(kept)
+    return kept
+
+
+def remove_aggregator_copies(conn: psycopg.Connection) -> int:
+    """Aggregator rows already in the table whose posting has since shown up on an ATS board
+    (e.g. a company added to companies.csv): delete them, keep the ATS copy."""
+    ids, keys = ats_index(conn)
+    candidates = conn.execute("SELECT job_id, company, title, url FROM jobs WHERE source = ANY(%s)",
+                              (list(AGGREGATOR_SOURCES),)).fetchall()
+    doomed = [job_id for job_id, company, title, url in candidates
+              if is_ats_copy({"company": company, "title": title, "ats_refs": ats_refs(url)}, ids, keys)]
+    if doomed:
+        conn.execute("DELETE FROM jobs WHERE job_id = ANY(%s)", (doomed,))
+    return len(doomed)
 
 
 # ---- load -------------------------------------------------------------------------------------
@@ -230,6 +357,16 @@ def load(conn: psycopg.Connection, source: str, rows: list[dict], ok_companies: 
             if row["skills"]:
                 cur.executemany("INSERT INTO job_skills (job_id, skill_id) VALUES (%s, %s)",
                                 [(job_id, skill_ids[s]) for s in row["skills"]])
+            if source == "theirstack":
+                # Fetched once (incremental): seen dates come from TheirStack itself.
+                cur.execute("""UPDATE jobs
+                               SET first_seen = LEAST(first_seen, COALESCE(%(discovered)s::timestamptz, first_seen))
+                               WHERE job_id = %(id)s""", {"discovered": row.get("discovered_at"), "id": job_id})
+                if row.get("closed_at"):
+                    cur.execute("""UPDATE jobs SET is_active = FALSE,
+                                       last_seen = GREATEST(first_seen, LEAST(last_seen, %(closed)s::timestamptz))
+                                   WHERE job_id = %(id)s""", {"closed": row["closed_at"], "id": job_id})
+                    stats["closed"] += 1
 
         if ok_companies:   # ATS boards fetched OK today: anything not loaded today is gone
             loaded_ids = [r["external_id"] for r in rows]
@@ -254,11 +391,20 @@ def start_run(conn, source: str) -> int:
 
 
 def finish_run(conn, run_id: int, status: str, fetched: int, new: int, excluded: Counter, error: str | None = None,
-               loaded: int = 0):
+               loaded: int = 0, api_units: int | None = None):
     conn.execute("""UPDATE etl_runs SET finished_at = now(), status = %s, jobs_fetched = %s, jobs_new = %s,
-                    jobs_loaded = %s, jobs_excluded = %s, exclusion_reasons = %s, error_message = %s
+                    jobs_loaded = %s, jobs_excluded = %s, exclusion_reasons = %s, error_message = %s,
+                    api_units_used = %s
                     WHERE run_id = %s""",
-                 (status, fetched, new, loaded, sum(excluded.values()), Jsonb(dict(excluded)), error, run_id))
+                 (status, fetched, new, loaded, sum(excluded.values()), Jsonb(dict(excluded)), error, api_units,
+                  run_id))
+
+
+def api_units_used(source: str, day_dir: Path) -> int | None:
+    """Credits the extraction spent (TheirStack manifest); None for unmetered sources."""
+    if source != "theirstack":
+        return None
+    return json.loads((day_dir / "_manifest.json").read_text(encoding="utf-8")).get("credits_used")
 
 
 def check_role_families(conn) -> None:
@@ -276,6 +422,9 @@ def main() -> int:
     parser.add_argument("--sources", nargs="+", choices=SOURCES, default=list(SOURCES))
     parser.add_argument("--date", help="raw day to process (default: latest per source)")
     parser.add_argument("--dry-run", action="store_true", help="transform and report, write nothing")
+    parser.add_argument("--log-api-units", action="store_true",
+                        help="record the extraction's API credits in etl_runs (run_pipeline passes it only when it "
+                             "extracted in this run, so reprocessing raw files never counts credits twice)")
     args = parser.parse_args()
 
     env_path = ROOT / ".env"
@@ -293,13 +442,17 @@ def main() -> int:
         extractor = SkillExtractor(synonyms)
         check_role_families(conn)
 
-        for source in args.sources:
+        index = None
+        for source in sorted(args.sources, key=SOURCES.index):     # ATS boards before aggregators
             day_dir = latest_day_dir(source, args.date)
             if day_dir is None:
                 print(f"[{source}] no raw data found, skipped")
                 continue
             items, ok_companies, failed_boards, full_inventory = read_raw(source, day_dir)
             rows, excluded = transform(source, items, extractor)
+            if source in AGGREGATOR_SOURCES:
+                index = index or ats_index(conn)         # read once, after today's ATS loads
+                rows = drop_ats_copies(source, rows, excluded, *index)
             seen_ids = list({normalize(source, job, company)["external_id"] for company, job in items})
             boards = f", {len(ok_companies)} boards ok / {failed_boards} failed" if ok_companies is not None else ""
             print(f"[{source}] {day_dir.name}: {len(items)} postings{boards} -> {len(rows)} to load; "
@@ -309,15 +462,22 @@ def main() -> int:
 
             run_id = start_run(conn, source)
             try:
+                units = api_units_used(source, day_dir) if args.log_api_units else None
                 stats = load(conn, source, rows, ok_companies, skill_ids, full_inventory, seen_ids)
-                finish_run(conn, run_id, "success", len(items), stats["new"], excluded, loaded=len(rows))
+                finish_run(conn, run_id, "success", len(items), stats["new"], excluded, loaded=len(rows),
+                           api_units=units)
                 print(f"[{source}] loaded: {stats['new']} new, {stats['updated']} updated, "
                       f"{stats['removed']} removed (excluded by current rules), "
-                      f"{stats['deactivated']} deactivated (etl_runs.run_id={run_id})")
+                      f"{stats['deactivated'] + stats['closed']} deactivated (etl_runs.run_id={run_id})")
             except Exception as err:  # noqa: BLE001 -- any error: log it in etl_runs, go on with the next source
                 failures += 1
                 finish_run(conn, run_id, "failed", len(items), 0, excluded, f"{type(err).__name__}: {err}")
                 print(f"[{source}] FAILED, rolled back: {type(err).__name__}: {err}")
+
+        if not args.dry_run:
+            with conn.transaction():
+                removed = remove_aggregator_copies(conn)
+            print(f"[cross-source] {removed} aggregator rows removed: the same posting is on an ATS board")
     return 1 if failures else 0
 
 

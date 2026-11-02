@@ -30,7 +30,9 @@ GitHub Actions (daily cron)
        ├ ATS job boards (Greenhouse, Lever, Ashby): 48 companies, full descriptions
        ├ Adzuna: US remote postings, snippets (market volume)
        ├ Jooble: snippets (market volume)
-       └ Remotive: remote postings, full descriptions
+       ├ Remotive: remote postings, full descriptions
+       └ TheirStack: Costa Rica + LATAM-remote postings from employer career sites / ATS pages
+  → Cross-source deduplication: the same posting from an ATS board and an aggregator is kept once (ATS copy)
   → Transform: HTML cleanup → location → market (CR / US-remote / LATAM-remote) → title filter
                → deduplication → modality → tool extraction
   → Load: only in-scope postings, upserted into PostgreSQL on Neon; each run logged with
@@ -45,12 +47,15 @@ Aggregator APIs return descriptions cut to a few hundred characters, too short t
 
 | Source | Used for | Description | Notes |
 |---|---|---|---|
-| **ATS job boards**: Greenhouse, Lever, Ashby | Tool demand | Full | Official public job-board endpoints for a curated list of 48 companies hiring in Costa Rica or remotely (`etl/companies.csv`, built and verified by `etl/discover_boards.py`) |
+| **ATS job boards**: Greenhouse, Lever, Ashby, Recruitee, Personio | Tool demand | Full | Official public job-board endpoints for a curated list of 48 companies hiring in Costa Rica or remotely (`etl/companies.csv`, built and verified by `etl/discover_boards.py`) |
 | **Adzuna** | Market volume | Snippet | US postings that mention remote work |
 | **Jooble** | Market volume | Snippet | Its API currently serves US results only |
 | **Remotive** | Tool demand | Full | Remote-only board; its free API currently returns a small fixed sample |
+| **TheirStack** | Costa Rica coverage | Full (measured per posting) | Postings for our roles in Costa Rica and LATAM-remote, **only those with the employer's own career-site or ATS page** (no LinkedIn/Indeed-only listings). Free plan: 200 credits a month (1 per posting), so each run is capped and fetches only postings discovered since the previous run |
 
-Snippet-based rows are flagged `description_is_full = FALSE`, so tool rankings can be restricted to full descriptions.
+Snippet-based rows are flagged `description_is_full = FALSE`, so tool rankings can be restricted to full descriptions. For TheirStack the flag is decided from the text itself (at least 700 characters of substantive text, not cut off with "…").
+
+When the same posting arrives from an ATS board and an aggregator (the aggregator's link carries the ATS posting id, or same company and title), only the ATS copy is loaded; the aggregator copy is counted as `duplicate_ats` in `etl_runs`. Compliance decisions for every source considered are in [docs/SOURCES.md](docs/SOURCES.md).
 
 **How a posting's market is decided** (`etl/location.py`): structured fields first (Lever/Ashby work type and country), then the location text, then the title, and the description only as a last resort. It handles English and Spanish ("Remoto", "Teletrabajo", "San José, Costa Rica"). Postings that fit no market are excluded and counted, never loaded.
 
@@ -120,8 +125,12 @@ python -m etl.run_pipeline --target dev --skip-extract --skip-jooble --dry-run
 python -m etl.run_pipeline --target dev --skip-extract --skip-jooble
 python -m etl.run_pipeline --target dev --date 2026-11-01 --skip-jooble
 
-# A single source
+# A single source, or everything except some sources
 python -m etl.run_pipeline --target dev --sources lever
+python -m etl.run_pipeline --target dev --skip jooble theirstack
+
+# TheirStack credits: show this month's balance and the run's cap, spend nothing
+python etl/extract_theirstack.py --plan
 
 # Schema: apply pending migrations to dev (main gets them through the workflow)
 python -m etl.migrate --target dev --dry-run
@@ -136,12 +145,18 @@ python -m etl.gen_data_dictionary --target dev
 about 4 requests a day and each full run makes 2, so for repeated local runs prefer
 `--skip-extract`.
 
+TheirStack credits (200 a month on the free plan) are shared by every run: dev, main and local.
+Each run spends at most `--theirstack-max-credits` (default 15 on dev, 150 on main) and never
+goes past the month's credits minus a reserve of 10; reaching a cap is logged and is not a
+failure. Each run asks only for postings discovered since the last successful TheirStack run on
+that database (the first run on a database backfills 90 days).
+
 ## Automation (GitHub Actions)
 
 `.github/workflows/pipeline.yml` runs `python -m etl.run_pipeline --target <dev|main> --migrate --skip-jooble`:
 
 - **Manual** (Actions → *SkillMap pipeline* → *Run workflow*): choose `target` (default `dev`),
-  optionally *migrate only* or *include Jooble*.
+  optionally *migrate only*, *include Jooble* or *skip TheirStack*.
 - **Daily** at 11:17 UTC (05:17 Costa Rica), always against `main`. Enabled only after a manual
   dev run and a manual main run have passed.
 - Raw API responses are uploaded as a zip artifact kept **5 days** (~7 MB a day; GitHub Free
@@ -159,6 +174,7 @@ Repository secrets (Settings → Secrets and variables → Actions → *New repo
 | `ADZUNA_APP_ID` | Adzuna application ID | [developer.adzuna.com](https://developer.adzuna.com) → *Dashboard* → API Access Details (also in your local `.env`) |
 | `ADZUNA_APP_KEY` | Adzuna application key | Same page |
 | `JOOBLE_API_KEY` | Jooble API key | The key Jooble emailed you (also in your local `.env`); only used when *include Jooble* is ticked |
+| `THEIRSTACK_API_KEY` | TheirStack API key | [app.theirstack.com](https://app.theirstack.com) → Settings → API Key (also in your local `.env`) |
 
 The job only receives the connection string of the target it runs against.
 
@@ -187,6 +203,7 @@ Python · PostgreSQL (Neon) · SQL · pytest · GitHub Actions · Google Data St
 - Job data from **[The Adzuna API](https://www.adzuna.com)**.
 - Remote job data from **[Remotive](https://remotive.com)**. Each posting links back to its Remotive page.
 - Job data from **[Jooble](https://jooble.org)**.
+- Costa Rica and LATAM job data from **[TheirStack](https://theirstack.com)**.
 - Company job boards via the public **Greenhouse**, **Lever** and **Ashby** job-board APIs.
 
 ## Author

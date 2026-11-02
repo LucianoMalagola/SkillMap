@@ -6,7 +6,9 @@ SkillMap: turn one raw posting (exactly as an API returned it) into the fields o
     detect_modality(market, workplace_type, location, title, description) -> str
     clean_html(value) -> str
 
-Sources: greenhouse, lever, ashby (full descriptions) and jooble (snippets).
+Sources: ATS boards (greenhouse, lever, ashby, recruitee, personio) and remotive have full
+descriptions; jooble and adzuna have snippets; theirstack is judged per posting from the
+text itself (looks_full).
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 ATS_SOURCES = ("greenhouse", "lever", "ashby", "recruitee", "personio")
 FULL_TEXT_SOURCES = ATS_SOURCES + ("remotive",)     # description_is_full = TRUE
 SNIPPET_SOURCES = ("jooble", "adzuna")
+MEASURED_SOURCES = ("theirstack",)                  # description_is_full = looks_full(description)
+AGGREGATOR_SOURCES = ("jooble", "adzuna", "remotive", "theirstack")   # an ATS copy of the same posting wins
 
 # ---- raw board responses -> list of jobs --------------------------------------------------
 
@@ -104,6 +108,67 @@ def is_placeholder(description: str) -> bool:
     if _PLACEHOLDER_START.search(description or ""):
         return True
     return len(substantive_text(description)) < PLACEHOLDER_MIN_CHARS
+
+
+# Snippet APIs cut descriptions at ~250-500 characters (Adzuna: 500). The shortest full
+# TheirStack description in the 2026-11-02 sample had 926 characters left after removing
+# boilerplate; the median was ~3,600. Between the two: 700.
+FULL_MIN_CHARS = 700
+_TRUNCATED_END = re.compile(r"(?:\.\.\.|…)\s*$")
+
+
+def looks_full(description: str) -> bool:
+    """Judge from the text whether a description is complete (not a snippet): enough
+    substantive text, and not ending in an ellipsis."""
+    return len(substantive_text(description)) >= FULL_MIN_CHARS and not _TRUNCATED_END.search(description or "")
+
+
+def strip_markdown(text: str | None) -> str:
+    """TheirStack descriptions are Markdown: drop heading/emphasis markers, keep the words."""
+    text = (text or "").replace("\xa0", " ")
+    text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.M)              # ### Heading
+    text = re.sub(r"(\*\*|__)(?=\S)(.+?)(?<=\S)\1", r"\2", text)          # **bold**
+    text = re.sub(r"(?<![\w*])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![\w*])", r"\1", text)   # *italic*
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)                   # [text](url)
+    text = re.sub(r"^\s*[*+]\s+", "- ", text, flags=re.M)                  # bullets
+    text = re.sub(r"\\([\\`*_{}\[\]()#+\-.!|&])", r"\1", text)             # \- escapes
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+# ---- the same posting on an ATS board ---------------------------------------------------------
+# Aggregators often link to the employer's ATS page, whose id is our ATS external_id.
+_ATS_LINKS = (
+    ("greenhouse", re.compile(r"[?&]gh_jid=(\d+)")),
+    ("greenhouse", re.compile(r"greenhouse\.io/[^/?#]+/jobs/(\d+)")),
+    ("lever", re.compile(r"jobs\.(?:eu\.)?lever\.co/[^/?#]+/([0-9a-f]{8}-[0-9a-f-]{27})")),
+    ("ashby", re.compile(r"jobs\.ashbyhq\.com/[^/?#]+/([0-9a-f]{8}-[0-9a-f-]{27})")),
+    ("personio", re.compile(r"\.jobs\.personio\.(?:de|com)/job/(\d+)")),
+)
+
+
+def ats_refs(*urls: str | None) -> set[tuple[str, str]]:
+    """(ats_source, external_id) pairs found in links, e.g. '...?gh_jid=8924729002' ->
+    ('greenhouse', '8924729002'). Recognises an aggregator copy of an ATS posting."""
+    refs = set()
+    for url in urls:
+        for source, pattern in _ATS_LINKS:
+            refs.update((source, found) for found in pattern.findall(url or ""))
+    return refs
+
+
+_LEGAL_SUFFIX = re.compile(r"\b(?:inc|llc|ltd|limited|corp|corporation|co|company|sa|s a|srl|gmbh|plc|group)\b")
+
+
+def _plain(text: str | None) -> str:
+    text = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower()
+    text = re.sub(r"\(.*?\)|\[.*?\]", " ", text)
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
+
+
+def match_key(company: str | None, title: str | None) -> tuple[str, str]:
+    """Normalised (company, title) to recognise one posting listed by two sources: accents,
+    case, punctuation, legal suffixes and bracketed notes ("(Hybrid)") removed."""
+    return " ".join(_LEGAL_SUFFIX.sub(" ", _plain(company)).split()), _plain(title)
 
 
 # ---- modality ------------------------------------------------------------------------------
@@ -226,6 +291,12 @@ def _salary(source: str, job: dict) -> tuple[float | None, float | None, str | N
         return None, None, None
     if source == "remotive":
         return _salary_from_text(job.get("salary"))
+    if source == "theirstack":
+        # TheirStack annualises salaries itself (min/max_annual_salary, in salary_currency)
+        low, high = job.get("min_annual_salary"), job.get("max_annual_salary")
+        if low or high:
+            return low or high, high or low, job.get("salary_currency")
+        return None, None, None
     if source == "adzuna":
         # Most Adzuna salaries are Adzuna's own estimates (salary_is_predicted = "1"): skip those.
         if str(job.get("salary_is_predicted")) == "0" and job.get("salary_min"):
@@ -353,11 +424,33 @@ def normalize(source: str, job: dict, company: str) -> dict:
                       description=clean_html(job.get("description")), url=_strip_tracking(job.get("redirect_url")),
                       posted_at=_parse_datetime(job.get("created")), workplace_type=None)
         company = (job.get("company") or {}).get("display_name") or company
+    elif source == "theirstack":
+        # Only postings with a final_url are requested: the employer's own page (career site or ATS).
+        fields = dict(external_id=str(job["id"]), title=job.get("job_title"),
+                      location_raw=_theirstack_location(job),
+                      description=strip_markdown(job.get("description")),
+                      url=job.get("final_url") or job.get("url"),
+                      posted_at=_parse_datetime(job.get("date_posted")),
+                      workplace_type="remote" if job.get("remote") else "hybrid" if job.get("hybrid") else None)
+        company = job.get("company") or company
     else:
         raise ValueError(f"unknown source: {source}")
 
     salary_min, salary_max, currency = _salary(source, job)
     fields.update(source=source, company=company, salary_min=salary_min, salary_max=salary_max,
-                  salary_currency=currency, description_is_full=source in FULL_TEXT_SOURCES,
-                  title=(fields["title"] or "").strip(), description=(fields["description"] or "").strip())
+                  salary_currency=currency, title=(fields["title"] or "").strip(),
+                  description=(fields["description"] or "").strip())
+    fields["description_is_full"] = (looks_full(fields["description"]) if source in MEASURED_SOURCES
+                                     else source in FULL_TEXT_SOURCES)
     return fields
+
+
+def _theirstack_location(job: dict) -> str:
+    places = [loc.get("display_name") for loc in job.get("locations") or [] if loc.get("display_name")]
+    if not places:
+        place = job.get("long_location") or job.get("location") or ""
+        country = job.get("country") or ""
+        places = [place if country.lower() in place.lower() else ", ".join(x for x in (place, country) if x)]
+    if job.get("remote") and not any("remote" in p.lower() for p in places):
+        places = [f"Remote - {p}" if p else "Remote" for p in places] or ["Remote"]
+    return " | ".join(dict.fromkeys(p for p in places if p))

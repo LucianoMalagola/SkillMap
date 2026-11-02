@@ -13,7 +13,8 @@ Target roles (MVP): Data Analyst, BI Analyst, Business Operations Analyst, Data 
 - Developer machine: **Windows, PowerShell**. Repo at `C:\Users\lmala\SkillMap`.
 - Python + `requirements.txt` (requests, psycopg[binary], python-dotenv).
 - Secrets live only in `.env` (git-ignored). Template: `.env.example`.
-  Keys: `DATABASE_URL`, `JOOBLE_API_KEY`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`.
+  Keys: `DATABASE_URL`, `JOOBLE_API_KEY`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `THEIRSTACK_API_KEY`
+  (`JSEARCH_API_KEY` is also in `.env` but unused: JSearch is not used for now).
   **Never commit `.env`, never print keys in output or commit messages.**
 - When creating `.env` from PowerShell use `Set-Content -Encoding ascii` (not `>`, which writes UTF-16).
 
@@ -51,7 +52,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   06 Recruitee/Personio sources, 07 "last 90 days" / "open now" windows (`_90d` / `_open_now` names),
   08 role families (`role_families` table + `jobs.role_family`, FK on the pair, mirrors `roles.ROLE_FAMILIES`;
   transform_load refuses to run if they differ), `etl_runs.jobs_loaded`, `n` / `enough_data` (n >= 10)
-  on tool views, directed co-occurrence, analysis views.
+  on tool views, directed co-occurrence, analysis views. 09 `theirstack` source, `etl_runs.api_units_used`.
   Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`, `role_families`, `schema_migrations`.
   Views: `v_skill_demand`, `v_skill_demand_segment`, `v_skill_cooccurrence`, `v_modality_mix`,
   `v_posting_counts`, `v_weekly_postings`, `v_weekly_skill_trend`, `v_last_updated`, `v_postings`,
@@ -59,7 +60,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - `jobs` has `UNIQUE(source, external_id)`, `first_seen`/`last_seen`, `is_active`, `description_is_full`,
   `modality` in ('remote','hybrid','onsite','unspecified'), `market` in ('CR','US-remote','LATAM-remote')
   NOT NULL, `role_category` / `role_family` NOT NULL, `source` in ('jooble','adzuna','remotive',
-  'greenhouse','lever','ashby','recruitee','personio').
+  'greenhouse','lever','ashby','recruitee','personio','theirstack').
 - `etl_runs` has `jobs_loaded`, `jobs_excluded` INT and `exclusion_reasons` JSONB (default `{}`).
 
 ## Data sources: decisions and findings
@@ -89,6 +90,25 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   Terms: personal/academic research; credit "The Adzuna API" with a link to adzuna.com.
   First run (2026-11-01): 4 calls, 130 postings → 24 loaded.
 - **USAJOBS:** decided not to use for now.
+- **TheirStack** (added 2026-11-02, `etl/extract_theirstack.py`): Costa Rica + LATAM-remote postings for our
+  roles, **only postings with a `final_url`** (employer career site / ATS page; LinkedIn/Indeed-only listings are
+  not requested: Luciano's condition). Measured 2026-11-02 (90 days): 289 CR postings for our titles, 120 with a
+  final_url, 19 LATAM-remote; ~92% not in our DB. Descriptions are Markdown, full (`description_is_full` from
+  `normalize.looks_full`: >= 700 substantive chars, no trailing ellipsis). **Credits:** free plan 200/month,
+  1 per job returned, max 5 pages x 25 per search, 10 req/min; counts are not free (1 credit if anything matches).
+  The extractor reads `/v0/billing/credit-balance` (free) before each run and never goes past
+  `api_credits - 10`; per-run cap `run_pipeline.THEIRSTACK_MAX_CREDITS` (dev 15, main 150). Cap reached = logged,
+  not a failure. Incremental: `--since` = last successful TheirStack run on the target - 1 h (first run = 90-day
+  backfill). Each posting is fetched once: `first_seen` = TheirStack `discovered_at`; `closed_at` -> inactive.
+  TheirStack lists one posting once per site (HPE req 1209477: 3 Workday sites + careers.hpe.com, 4 company
+  spellings): `transform_load.merge_listing_copies` merges same title + same text or same 6+ digit requisition
+  number in the link. Credits are shared by dev, main and local runs.
+- **JSearch (OpenWeb Ninja):** not used for now (2026-11-02): results come via Google for Jobs / LinkedIn / Indeed,
+  and its terms pass those sites' terms on to us. Rejected outright: OpenWeb Ninja's platform APIs (LinkedIn,
+  Indeed, Glassdoor, ZipRecruiter, Monster), Apify Indeed scrapers, Coresignal (see `docs/SOURCES.md`).
+- **Cross-source dedup:** aggregator rows (jooble, adzuna, remotive, theirstack) that are the same posting as an
+  ATS row (ATS id in the link, e.g. `gh_jid=`, or same `normalize.match_key` company + title among ATS rows seen
+  in 90 days) are not loaded (`duplicate_ats`), and existing ones are deleted after each load.
 
 ### Source compliance (rule; follow it for every source)
 - Only use sources that offer an **official or documented public API/feed meant for this use**, OR whose
@@ -183,6 +203,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       `data/raw/<ats>/<date>/<token>.json` + `_manifest.json` (status / n_jobs / file per board;
       partial re-runs merge into it). Sequential, 1 s between boards, retries on network/429/5xx;
       a failed board is recorded and the run continues (exit 1 only if every board fails).
+      (TheirStack: see Data sources.)
       First run (2026-11-01): 48/48 boards, 5,400 postings, 83.5 MB, ~80 s. Verified: counts match
       Greenhouse `meta.total`, Lever returns everything without pagination, median description
       3.7k–6.4k chars.

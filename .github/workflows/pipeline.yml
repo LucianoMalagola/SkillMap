@@ -3,7 +3,8 @@
 # person who last edited the cron line; manual runs: to whoever started it).
 #
 # Secrets (Settings -> Secrets and variables -> Actions), see README "Automation":
-#   DATABASE_URL_DEV, DATABASE_URL_MAIN, ADZUNA_APP_ID, ADZUNA_APP_KEY, JOOBLE_API_KEY
+#   DATABASE_URL_DEV, DATABASE_URL_MAIN, ADZUNA_APP_ID, ADZUNA_APP_KEY, JOOBLE_API_KEY,
+#   THEIRSTACK_API_KEY
 # Only the connection string of the chosen target is passed to the job.
 
 name: SkillMap pipeline
@@ -22,6 +23,10 @@ on:
         default: false
       include_jooble:
         description: "Include Jooble (its key only returns US results for now)"
+        type: boolean
+        default: false
+      skip_theirstack:
+        description: "Skip TheirStack (saves credits; 200/month shared by every run)"
         type: boolean
         default: false
   # Daily run, always against main. DISABLED until a manual dev run and a manual main run
@@ -60,11 +65,13 @@ jobs:
           ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
           ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
           JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
+          THEIRSTACK_API_KEY: ${{ secrets.THEIRSTACK_API_KEY }}
           PYTHONUNBUFFERED: "1"
         run: |
           args="--target $TARGET --migrate"
           if [ "${{ inputs.migrate_only }}" = "true" ]; then args="$args --migrate-only"; fi
           if [ "${{ inputs.include_jooble }}" != "true" ]; then args="$args --skip-jooble"; fi
+          if [ "${{ inputs.skip_theirstack }}" = "true" ]; then args="$args --skip theirstack"; fi
           echo "python -m etl.run_pipeline $args"
           python -m etl.run_pipeline $args
 

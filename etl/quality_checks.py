@@ -20,6 +20,10 @@ Checks on one pipeline run (with --since, which run_pipeline passes):
   sources_nonempty     every expected source fetched at least one posting
   loaded_nonzero       the run loaded at least one posting in total
   no_unusual_drop      no source (or the total) loaded < DROP_RATIO of its previous run
+INCREMENTAL_SOURCES (TheirStack) are exempt from sources_nonempty and no_unusual_drop: each
+run fetches only postings discovered since the last one (often none, and always far fewer than
+the first 90-day backfill), and a run stopped by its credit cap fetches nothing on purpose.
+They must still log a successful run (runs_succeeded).
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ CONTRACT_FILE = ROOT / "docs" / "view_contract.json"
 STALE_DAYS = 14            # keep in step with transform_load.STALE_DAYS
 DROP_RATIO = 0.5           # fail if a source loads less than half of what its previous run loaded...
 DROP_MIN_PREVIOUS = 10     # ...and the previous run loaded at least this many (small numbers are noisy)
+INCREMENTAL_SOURCES = ("theirstack",)
 
 PCT_COLUMNS = {
     "v_skill_demand": ["pct_postings_90d"],
@@ -144,16 +149,17 @@ def run_checks(conn: psycopg.Connection, since: datetime, expected_sources: list
               if s not in runs or runs[s][0] != "success"]
     out.append(Result("runs_succeeded", not not_ok, "; ".join(not_ok) or ", ".join(expected_sources)))
 
-    empty = [s for s in expected_sources if s in runs and not runs[s][1]]
+    empty = [s for s in expected_sources if s in runs and not runs[s][1] and s not in INCREMENTAL_SOURCES]
     out.append(Result("sources_nonempty", not empty,
                       f"fetched nothing: {', '.join(empty)}" if empty else "every source fetched postings"))
 
     total = sum(r[2] for r in runs.values())
     out.append(Result("loaded_nonzero", total > 0, f"{total} postings loaded"))
+    total = sum(r[2] for s, r in runs.items() if s not in INCREMENTAL_SOURCES)   # for the drop check
 
     drops = []
     previous_total = 0
-    for source in expected_sources:
+    for source in [s for s in expected_sources if s not in INCREMENTAL_SOURCES]:
         prev = conn.execute("""SELECT jobs_loaded FROM etl_runs
                                WHERE source = %s AND status = 'success' AND started_at < %s
                                  AND jobs_loaded IS NOT NULL

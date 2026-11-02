@@ -6,6 +6,7 @@ SkillMap: run the whole pipeline. The one command used locally AND by GitHub Act
     python -m etl.run_pipeline --target dev --skip-extract      # reuse today's raw files (no API calls)
     python -m etl.run_pipeline --target dev --skip-extract --date 2026-11-01   # reprocess a past day
     python -m etl.run_pipeline --target dev --sources lever     # a single source
+    python -m etl.run_pipeline --target dev --skip theirstack   # everything except some sources
     python -m etl.run_pipeline --target dev --dry-run           # transform + report, write nothing
     python -m etl.run_pipeline --target main --migrate          # what the workflow runs
 
@@ -13,8 +14,13 @@ Steps:
   1. --migrate: apply pending migrations (etl/migrate.py). The workflow always passes it, so
      main gets schema changes only through the workflow, after they've been tested on dev.
   2. Extract (unless --skip-extract): extract_ats / extract_adzuna / extract_remotive /
-     extract_jooble for the selected sources. A failing extractor doesn't stop the others;
-     the run is marked failed at the end.
+     extract_jooble / extract_theirstack for the selected sources. A failing extractor doesn't
+     stop the others; the run is marked failed at the end.
+     TheirStack is metered (credits shared by dev, main and local runs): it gets
+     --since <last successful TheirStack run on the target, minus 1 h> and a per-run cap
+     (THEIRSTACK_MAX_CREDITS: small on dev, enough for the 90-day backfill on main;
+     --theirstack-max-credits overrides). The extractor also never exceeds the month's
+     credits; hitting a cap is logged, not a failure.
   3. Scrub: redact any API key found in data/raw/ (safety net before the artifact upload).
   4. Transform + load (etl/transform_load.py) for the selected sources, always for ONE raw
      day (today, or --date). Never "latest available": reloading an old day would mark
@@ -33,7 +39,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import psycopg
@@ -53,8 +59,12 @@ ETL = ROOT / "etl"
 RAW_DIR = ROOT / "data" / "raw"
 COMPANIES = ETL / "companies.csv"
 ATS_SOURCES = ("greenhouse", "lever", "ashby", "recruitee", "personio")
-OTHER_SOURCES = ("adzuna", "remotive", "jooble")
+OTHER_SOURCES = ("adzuna", "remotive", "jooble", "theirstack")
 ALL_SOURCES = ATS_SOURCES + OTHER_SOURCES
+# Per-run TheirStack credit caps. The free plan has 200 credits a month for ALL runs, so dev
+# test runs get a small slice and main gets enough for its first 90-day backfill (~140).
+THEIRSTACK_MAX_CREDITS = {"dev": 15, "main": 150}
+SINCE_OVERLAP = timedelta(hours=1)
 
 
 def log(msg: str = "") -> None:
@@ -67,14 +77,12 @@ def ats_with_boards(path: Path = COMPANIES) -> set[str]:
         return {row["ats"] for row in csv.DictReader(f)}
 
 
-def select_sources(requested: list[str] | None, skip_jooble: bool, boards: set[str]) -> list[str]:
+def select_sources(requested: list[str] | None, skip: list[str] | None, boards: set[str]) -> list[str]:
     sources = list(requested) if requested else [s for s in ALL_SOURCES if s not in ATS_SOURCES or s in boards]
-    if skip_jooble:
-        sources = [s for s in sources if s != "jooble"]
-    return sources
+    return [s for s in sources if s not in (skip or [])]
 
 
-def extract_commands(sources: list[str]) -> list[tuple[str, list[str]]]:
+def extract_commands(sources: list[str], theirstack_args: list[str] | None = None) -> list[tuple[str, list[str]]]:
     """(label, argv) per extractor; all ATS platforms go in one extract_ats call."""
     py = sys.executable
     cmds = []
@@ -83,8 +91,17 @@ def extract_commands(sources: list[str]) -> list[tuple[str, list[str]]]:
         cmds.append(("ats", [py, str(ETL / "extract_ats.py"), "--ats", *ats]))
     for source in OTHER_SOURCES:
         if source in sources:
-            cmds.append((source, [py, str(ETL / f"extract_{source}.py")]))
+            extra = (theirstack_args or []) if source == "theirstack" else []
+            cmds.append((source, [py, str(ETL / f"extract_{source}.py"), *extra]))
     return cmds
+
+
+def theirstack_since(conn) -> datetime | None:
+    """Start of the last successful TheirStack run that fetched something, minus an overlap;
+    None = never ran on this database -> backfill."""
+    last = conn.execute("""SELECT max(started_at) FROM etl_runs
+                           WHERE source = 'theirstack' AND status = 'success' AND jobs_fetched > 0""").fetchone()[0]
+    return last - SINCE_OVERLAP if last else None
 
 
 def run(argv: list[str], env: dict | None = None) -> int:
@@ -95,7 +112,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the SkillMap pipeline end to end")
     parser.add_argument("--target", choices=TARGETS, required=True, help="database to load (dev or main)")
     parser.add_argument("--sources", nargs="+", choices=ALL_SOURCES, help="only these sources (default: all)")
-    parser.add_argument("--skip-jooble", action="store_true", help="leave Jooble out (its key is US-only for now)")
+    parser.add_argument("--skip", nargs="+", choices=ALL_SOURCES, default=[], help="leave these sources out")
+    parser.add_argument("--skip-jooble", action="store_true", help="same as --skip jooble (its key is US-only for now)")
+    parser.add_argument("--theirstack-max-credits", type=int,
+                        help=f"TheirStack per-run credit cap (default per target: {THEIRSTACK_MAX_CREDITS})")
     parser.add_argument("--skip-extract", action="store_true", help="no API calls: reuse the raw files of --date")
     parser.add_argument("--date", help="raw day to transform, YYYY-MM-DD (default: today; implies --skip-extract)")
     parser.add_argument("--dry-run", action="store_true", help="transform and report only; no DB writes, no checks")
@@ -106,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
 
     day = args.date or date.today().isoformat()
     skip_extract = args.skip_extract or bool(args.date)
-    sources = select_sources(args.sources, args.skip_jooble, ats_with_boards())
+    sources = select_sources(args.sources, args.skip + (["jooble"] if args.skip_jooble else []), ats_with_boards())
     failures: list[str] = []
     started = time.monotonic()
 
@@ -133,10 +153,15 @@ def main(argv: list[str] | None = None) -> int:
 
     with psycopg.connect(url, autocommit=True) as conn:
         run_start = conn.execute("SELECT now()").fetchone()[0]   # DB clock: etl_runs uses it too
+        since = theirstack_since(conn) if "theirstack" in sources else None
+    theirstack_args = ["--max-credits", str(args.theirstack_max_credits if args.theirstack_max_credits is not None
+                                            else THEIRSTACK_MAX_CREDITS[args.target])]
+    if since:
+        theirstack_args += ["--since", since.isoformat(timespec="seconds")]
 
     # 2. extract
     if not skip_extract:
-        for label, cmd in extract_commands(sources):
+        for label, cmd in extract_commands(sources, theirstack_args):
             log(f"\n== extract: {label} ==")
             code = run(cmd)
             if code:
@@ -153,6 +178,8 @@ def main(argv: list[str] | None = None) -> int:
     cmd = [sys.executable, str(ETL / "transform_load.py"), "--sources", *sources, "--date", day]
     if args.dry_run:
         cmd.append("--dry-run")
+    if not skip_extract:
+        cmd.append("--log-api-units")
     code = run(cmd, env=env)
     if code:
         failures.append(f"transform_load (exit {code})")
