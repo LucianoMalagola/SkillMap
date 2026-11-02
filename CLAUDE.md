@@ -168,7 +168,8 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - [ ] GitHub Actions daily workflow (secrets: `DATABASE_URL` for main, API keys); upload
       `data/raw/` as a compressed artifact, `retention-days: 5` (~7 MB/day zipped)
 - [ ] Data Studio dashboard (public link) + Power BI `.pbix` with "How well do I match?" page
-- [ ] README: findings with numbers, screenshots, limitations
+- [x] README: architecture, sources, three markets, data model, limitations, credits (Adzuna, Remotive, Jooble)
+- [ ] README: findings with numbers and dashboard screenshots (after the dashboards)
 
 ## Working conventions
 - Talk with Luciano in the language he writes in (Spanish or English).
