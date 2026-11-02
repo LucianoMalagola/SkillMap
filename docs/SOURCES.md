@@ -4,10 +4,14 @@ Every data source considered for SkillMap, with what was checked and the decisio
 Rule (see CLAUDE.md, "Source compliance"): only sources with an official/documented public
 API or feed meant for this use, or whose terms explicitly allow automated access. Terms
 **and** robots.txt are checked before any extractor is written. Never bypass logins,
-CAPTCHAs, rate limits or robots.txt.
+CAPTCHAs or rate limits.
 
-Columns: **Decision**: allowed / rejected / ⚠ open (needs a decision). Dates are when the
-terms/robots.txt were checked.
+**Which rules govern what** (decided 2026-11-02): calls to **documented API endpoints** follow
+that API's documentation and terms (rate limits, quotas, attribution, usage restrictions).
+robots.txt governs **crawling web pages**; a robots.txt that disallows an API host does not
+override the API's documented terms. A `Crawl-delay` on a host we call is honoured anyway.
+
+Columns: **Decision**: allowed / rejected. Dates are when the terms/robots.txt were checked.
 
 ## In use
 
@@ -16,9 +20,9 @@ terms/robots.txt were checked.
 | Greenhouse Job Board API | `GET boards-api.greenhouse.io/v1/boards/{token}/jobs` | [docs](https://docs.greenhouse.io/job-board.html): "Job Board data is publicly available, so authentication is not required for any GET endpoints." | `boards-api.greenhouse.io`: only `/embed/` disallowed | **allowed** | Official, documented, public; we only call `/v1/boards/` | 2026-11-02 |
 | Lever Postings API | `GET api.lever.co/v0/postings/{token}` | [docs](https://github.com/lever/postings-api): published postings are publicly viewable; API "designed to help you create a job site" | `api.lever.co`: `Allow: /`, **`Crawl-delay: 1`** | **allowed** | Official, documented, public. Crawl-delay respected: `extract_ats.py` waits 1 s between boards; `discover_boards.py` limits each host to 1 request/s (fixed 2026-11-02; it previously ran 4 workers in parallel) | 2026-11-02 |
 | Ashby Job Posting API | `GET api.ashbyhq.com/posting-api/job-board/{token}` | [docs](https://developers.ashbyhq.com/docs/public-job-posting-api): data for "all currently published Job Postings… use this data to populate [a careers page]"; works without a key | `api.ashbyhq.com`: no robots.txt (401). (`jobs.ashbyhq.com` disallows `/api/`, a different host we don't call) | **allowed** | Official, documented, public | 2026-11-02 |
-| Adzuna API | `GET api.adzuna.com/v1/api/jobs/us/search/{page}` with app_id/app_key | [terms](https://developer.adzuna.com/docs/terms_of_service): personal/academic research allowed; credit "The Adzuna API" with a link; limits may vary | **`api.adzuna.com`: `User-agent: *` / `Disallow: /`** | **⚠ open**: allowed by terms (official, key-based API), but robots.txt disallows everything on the API host | Official API licensed by terms. Its robots.txt targets crawlers, but the rule says never bypass robots.txt, so this needs an explicit decision | 2026-11-02 |
+| Adzuna API | `GET api.adzuna.com/v1/api/jobs/us/search/{page}` with app_id/app_key | [terms](https://developer.adzuna.com/docs/terms_of_service): personal/academic research allowed; credit "The Adzuna API" with a link; limits may vary | `api.adzuna.com`: `User-agent: *` / `Disallow: /` | **allowed** (decided 2026-11-02) | We call only the documented, key-based search endpoint that Adzuna issues keys for, under its API terms: personal/academic research use, credit "The Adzuna API" with a link (README Credits), stay within the issued quota (~6 calls/run of ~1,000/month; `--max-calls` cap). The robots.txt disallow addresses crawlers of the host; we don't crawl pages. The app_id Adzuna echoes in responses is redacted before saving | 2026-11-02 |
 | Jooble API | `POST jooble.org/api/{key}` | [API page](https://jooble.org/api/about): official API with a key | `jooble.org`: no rule for `/api/` (disallows `/desc/`, `/away/`, `/employer/api`… which we don't use) | **allowed** | Official, documented, key-based. We never fetch Jooble description pages (`/desc/`) | 2026-11-02 |
-| Remotive API | `GET remotive.com/api/remote-jobs?category=…` | [docs](https://github.com/remotive-com/remote-jobs-api) + API "legal notice": max ~4 requests/day; link back and name Remotive; don't resubmit to job boards | **`remotive.com`: `Disallow: /api/*` and `Disallow: /`** | **⚠ open**: documented and invited by its own legal notice, but robots.txt disallows `/api/*`. Also currently returns a fixed 12-job sample | Same conflict as Adzuna; low value right now | 2026-11-02 |
+| Remotive API | `GET remotive.com/api/remote-jobs?category=…` | [docs](https://github.com/remotive-com/remote-jobs-api) + API "legal notice": max ~4 requests/day; link back and name Remotive; don't resubmit to job boards | `remotive.com`: `Disallow: /api/*` and `Disallow: /` | **allowed** (decided 2026-11-02) | We call only the documented public endpoint, which Remotive's own API notice invites developers to use, under its stated terms: max ~4 requests/day and never >2/min (we make 2 per run, 35 s apart), link back to the Remotive job URL and name Remotive as source (jobs.url + README Credits), no resubmission to job boards, no signup gating. robots.txt addresses crawlers of the site's pages; we don't crawl them. Note: currently returns a fixed 12-job sample | 2026-11-02 |
 
 ## Evaluated for Costa Rica coverage (ATS platforms)
 

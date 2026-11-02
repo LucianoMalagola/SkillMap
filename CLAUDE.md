@@ -82,18 +82,24 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 
 ### Source compliance (rule; follow it for every source)
 - Only use sources that offer an **official or documented public API/feed meant for this use**, OR whose
-  **terms of service explicitly allow automated access**. Check the terms **and** robots.txt before writing
-  any extractor. If terms prohibit scraping/automated extraction, or content requires login, do NOT use
-  the source, whatever technical access exists.
-- Never bypass logins, CAPTCHAs, rate limits or robots.txt (incl. `Crawl-delay`).
+  **terms of service explicitly allow automated access**. If terms prohibit scraping/automated extraction,
+  or content requires login, do NOT use the source, whatever technical access exists.
+- **Which rules govern what** (clarified 2026-11-02):
+  - **Documented API endpoints** (Greenhouse/Lever/Ashby job-board APIs, Recruitee, Personio, Adzuna,
+    Jooble, Remotive): governed by the **API's own documentation and terms**: its stated rate limits,
+    request quotas, attribution and usage restrictions. Follow them exactly. A robots.txt that disallows
+    the API host does not override documented API terms: robots.txt is for crawling web pages.
+  - **Web pages / crawling** (any HTML page, sitemap, or undocumented endpoint): governed by **robots.txt**
+    (incl. `Crawl-delay`) **and** the site's terms. We don't crawl pages for postings.
+  - In both cases, if a robots.txt sets a `Crawl-delay` on a host we call, honour it anyway (Lever: 1 s).
+- Check the docs/terms **and** robots.txt before writing any extractor, and record both.
+- Never bypass logins, CAPTCHAs or rate limits; never crawl pages that robots.txt disallows.
 - Discovering company **names** from public directories by reading them is fine; extracting postings from
   sites that prohibit it is not.
 - `docs/SOURCES.md` is the compliance register: for each source considered, the terms URL, robots.txt
-  result, decision (allowed / rejected / ⚠ open), reason, and date checked. Update it before adding a source.
+  result, decision (allowed / rejected), reason, and date checked. Update it before adding a source.
 - Postings can contain personal data (recruiter names/emails). Dashboards show **aggregates only**; never
   publish raw descriptions.
-- ⚠ Open (2026-11-02): `api.adzuna.com` and `remotive.com/api/` are official, documented APIs, but their
-  robots.txt disallows all agents. Awaiting Luciano's decision; see docs/SOURCES.md.
 
 ### Location scope and filtering
 - **Extract saves EVERYTHING:** the full, unfiltered API response goes to `data/raw/<source>/<date>/`.
