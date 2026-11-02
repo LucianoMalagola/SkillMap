@@ -212,3 +212,33 @@ Paysafe,CR,paysafe,Fintech
 Nuvei,CR,nuvei,Fintech
 Fortinet,CR,fortinet,Tech
 Rokt,CR,rokt,Tech
+Wizeline,excluded,wizeline,"greenhouse/wizeline: 36 jobs, none in CR or target roles (checked 2026-11-02)"
+4Geeks,CR,4geeks;4geeksacademy,CR software company; not found on the 5 allowed ATSs 2026-11-02
+Jobsity,LATAM-remote,jobsity,Nearshore; remote LATAM; not found on the 5 allowed ATSs 2026-11-02
+Truelogic,LATAM-remote,truelogic;truelogicsoftware,Nearshore; remote LATAM; confirmed 2026-11-02
+Distillery,LATAM-remote,distillery;distillerytech,Nearshore; remote LATAM; not found on the 5 allowed ATSs 2026-11-02
+Grupo Babel,CR,grupobabel;babel,CR IT services; not found on the 5 allowed ATSs 2026-11-02
+Thoughtworks,excluded,thoughtworks,greenhouse: no target roles (checked 2026-11-02)
+Perficient,LATAM-remote,perficient;perficientlatam,LATAM delivery centres; not found on the 5 allowed ATSs 2026-11-02
+Endava,LATAM-remote,endava,LATAM delivery; not found on the 5 allowed ATSs 2026-11-02
+Lionbridge,CR,lionbridge,CR presence; not found on the 5 allowed ATSs 2026-11-02
+Toptal,LATAM-remote,toptal,Remote worldwide; confirmed 2026-11-02
+Andela,excluded,andela,ashby: no target roles (checked 2026-11-02)
+Revelo,LATAM-remote,revelo,LATAM talent platform; not found on the 5 allowed ATSs 2026-11-02
+Terminal,excluded,terminal;terminalio,ashby: no target roles (checked 2026-11-02)
+Automattic,LATAM-remote,automattic,Remote worldwide; not found on the 5 allowed ATSs 2026-11-02
+Doist,LATAM-remote,doist,Remote worldwide; not found on the 5 allowed ATSs 2026-11-02
+Hotjar,LATAM-remote,hotjar,Remote worldwide; not found on the 5 allowed ATSs 2026-11-02
+Oyster,excluded,oyster;oysterhr,ashby: no target roles (checked 2026-11-02)
+Buffer,LATAM-remote,buffer,Remote worldwide; not found on the 5 allowed ATSs 2026-11-02
+Help Scout,excluded,helpscout,ashby: no target roles (checked 2026-11-02)
+Sourcegraph,LATAM-remote,sourcegraph,Remote worldwide; not found on the 5 allowed ATSs 2026-11-02
+1Password,US-remote,1password,Remote Americas; confirmed 2026-11-02
+DuckDuckGo,LATAM-remote,duckduckgo,Remote worldwide; not found on the 5 allowed ATSs 2026-11-02
+Kraken,US-remote,kraken;kraken.com,Remote worldwide; confirmed 2026-11-02
+Wildlife Studios,excluded,wildlifestudios,greenhouse: 0 postings in scope (checked 2026-11-02)
+Nubank,excluded,nubank,"ashby/nubank: on-site Brazil/Mexico, 0 in scope (checked 2026-11-02)"
+Mercado Libre,LATAM-remote,mercadolibre,LATAM; not found on the 5 allowed ATSs 2026-11-02
+Rappi,LATAM-remote,rappi,LATAM; not found on the 5 allowed ATSs 2026-11-02
+Bitso,LATAM-remote,bitso,LATAM; not found on the 5 allowed ATSs 2026-11-02
+Kavak,excluded,kavak,"lever: 4 jobs, no target roles (checked 2026-11-02)"
