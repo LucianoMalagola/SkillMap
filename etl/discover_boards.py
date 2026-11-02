@@ -22,7 +22,9 @@ import csv
 import json
 import re
 import sys
+import threading
 import time
+from urllib.parse import urlsplit
 from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
@@ -43,6 +45,9 @@ ENDPOINTS = {
 }
 GREENHOUSE_BOARD_INFO = "https://boards-api.greenhouse.io/v1/boards/{token}"
 REQUEST_DELAY = 0.5  # seconds each worker waits after a request
+# At most one request per second to any single host, whatever the number of workers
+# (api.lever.co's robots.txt sets Crawl-delay: 1).
+MIN_INTERVAL_PER_HOST = 1.0
 MAX_ATTEMPTS = 3
 RETRY_STATUSES = {429, 500, 502, 503, 504}
 
@@ -54,6 +59,23 @@ DATA_ROLE_RE = re.compile(
     re.IGNORECASE,
 )
 COSTA_RICA_RE = re.compile(r"costa\s*rica|san jos[eé]\b|heredia|alajuela|cartago|escaz[uú]", re.IGNORECASE)
+
+_host_locks: dict[str, threading.Lock] = {}
+_host_last: dict[str, float] = {}
+_locks_guard = threading.Lock()
+
+
+def _wait_for_host(url: str) -> None:
+    """Block until MIN_INTERVAL_PER_HOST has passed since the last request to this host."""
+    host = urlsplit(url).hostname or ""
+    with _locks_guard:
+        lock = _host_locks.setdefault(host, threading.Lock())
+    with lock:
+        wait = _host_last.get(host, 0) + MIN_INTERVAL_PER_HOST - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _host_last[host] = time.monotonic()
+
 
 session = requests.Session()
 session.headers["User-Agent"] = "SkillMap board discovery (portfolio project)"
@@ -95,6 +117,7 @@ def probe(ats: str, token: str) -> dict:
     # isn't mistaken for "this company has no board".
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
+            _wait_for_host(url)
             response = session.get(url, timeout=60)  # some boards return several MB
             error = f"HTTP {response.status_code}" if response.status_code in RETRY_STATUSES else None
         except requests.RequestException as err:
@@ -125,6 +148,7 @@ def probe(ats: str, token: str) -> dict:
     # (e.g. a generic slug that belongs to a different company).
     if ats == "greenhouse" and jobs:
         try:
+            _wait_for_host(GREENHOUSE_BOARD_INFO)
             info = session.get(GREENHOUSE_BOARD_INFO.format(token=quote(token)), timeout=20).json()
             result["board_name"] = info.get("name")
         except (requests.RequestException, ValueError):

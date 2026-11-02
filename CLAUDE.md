@@ -75,6 +75,21 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   First run (2026-11-01): 4 calls, 130 postings → 24 loaded.
 - **USAJOBS:** decided not to use for now.
 
+### Source compliance (rule; follow it for every source)
+- Only use sources that offer an **official or documented public API/feed meant for this use**, OR whose
+  **terms of service explicitly allow automated access**. Check the terms **and** robots.txt before writing
+  any extractor. If terms prohibit scraping/automated extraction, or content requires login, do NOT use
+  the source, whatever technical access exists.
+- Never bypass logins, CAPTCHAs, rate limits or robots.txt (incl. `Crawl-delay`).
+- Discovering company **names** from public directories by reading them is fine; extracting postings from
+  sites that prohibit it is not.
+- `docs/SOURCES.md` is the compliance register: for each source considered, the terms URL, robots.txt
+  result, decision (allowed / rejected / ⚠ open), reason, and date checked. Update it before adding a source.
+- Postings can contain personal data (recruiter names/emails). Dashboards show **aggregates only**; never
+  publish raw descriptions.
+- ⚠ Open (2026-11-02): `api.adzuna.com` and `remotive.com/api/` are official, documented APIs, but their
+  robots.txt disallows all agents. Awaiting Luciano's decision; see docs/SOURCES.md.
+
 ### Location scope and filtering
 - **Extract saves EVERYTHING:** the full, unfiltered API response goes to `data/raw/<source>/<date>/`.
   That's the safety net to reprocess without spending API calls. No location filtering at extract time.
