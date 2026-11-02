@@ -78,8 +78,17 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   `ambiguous_location`.
 - **Each run logs exclusions** in `etl_runs` (`jobs_excluded`, `exclusion_reasons` JSONB, e.g.
   `{"out_of_scope": 120, "ambiguous_location": 15, "title_filter": 40}`).
-- **GitHub Actions:** `data/raw/` is temporary on the runner, so the workflow uploads it as an
-  artifact (short retention) for debugging.
+- **GitHub Actions:** `data/raw/` is temporary on the runner, so the workflow uploads it as a
+  **compressed artifact with 3–5 days retention** for debugging (`actions/upload-artifact`,
+  `retention-days: 5`, zip compression level 6 = its default).
+  - Size: one day of raw data = 83.5 MB uncompressed → **6.9 MB zipped** (measured 2026-11-01,
+    ATS boards + Jooble). 5 days retained ≈ 35 MB.
+  - GitHub limits (checked 2026-11-01): standard GitHub-hosted runners are free in public repos.
+    Artifact storage on GitHub Free is **500 MB** (shared with Packages; Support cannot raise it).
+    The official docs don't say whether public-repo artifacts count against it; plan as if they
+    do (35 MB is well within). Retention for public repos is configurable 1–90 days (default 90),
+    per a third-party guide, not confirmed in the official docs. Re-check if the workflow starts
+    failing on storage.
 
 ## Status
 - [x] Repo, README, schema, seed dictionary, Neon project + branches
@@ -126,7 +135,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       `ON CONFLICT (source, external_id) DO UPDATE SET last_seen = now()`, deactivate stale jobs,
       log each run in `etl_runs` incl. `jobs_excluded` and `exclusion_reasons`
 - [ ] GitHub Actions daily workflow (secrets: `DATABASE_URL` for main, API keys); upload
-      `data/raw/` as a short-retention artifact (~85 MB/day from the ATS boards alone)
+      `data/raw/` as a compressed artifact, `retention-days: 5` (~7 MB/day zipped)
 - [ ] Data Studio dashboard (public link) + Power BI `.pbix` with "How well do I match?" page
 - [ ] README: findings with numbers, screenshots, limitations
 
