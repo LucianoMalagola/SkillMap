@@ -418,6 +418,10 @@ def posting_text(source: str, job: dict) -> str:
         return _strip_html(job.get("snippet"))
     if source in ("adzuna", "remotive"):
         return _strip_html(job.get("description"))
+    if source == "recruitee":
+        return " ".join(_strip_html(job.get(k)) for k in ("description", "requirements")).strip()
+    if source == "personio":
+        return " ".join(f"{d.get('name', '')}: {_strip_html(d.get('value'))}" for d in job.get("jobDescriptions") or [])
     raise ValueError(f"unknown source: {source}")
 
 
@@ -443,7 +447,7 @@ def _ashby_country(entry: dict) -> str | None:
 def classify_posting(source: str, job: dict, description: str | None = None) -> tuple[str | None, str]:
     """Classify one raw posting, exactly as the API returned it.
 
-    source       'greenhouse' | 'lever' | 'ashby' | 'jooble' | 'adzuna' | 'remotive'
+    source       'greenhouse' | 'lever' | 'ashby' | 'recruitee' | 'personio' | 'jooble' | 'adzuna' | 'remotive'
     job          one job object from the raw response
     description  already-cleaned text (transform passes its own); computed if omitted
 
@@ -457,6 +461,8 @@ def classify_posting(source: str, job: dict, description: str | None = None) -> 
       Adzuna     location.area[0] is the country; remote/not from title, location, snippet
       Jooble     free text only; remote/not from title, location, snippet
       Remotive   always remote; candidate_required_location is the location
+      Recruitee  remote/hybrid/on_site booleans; country_code per location
+      Personio   office name(s) only (free text)
     """
     text = description if description is not None else posting_text(source, job)
     title = job.get("title") or job.get("text") or ""
@@ -494,6 +500,29 @@ def classify_posting(source: str, job: dict, description: str | None = None) -> 
         country = (loc.get("area") or [None])[0]
         parts = [(location, country)] if (location or country) else []
         return _classify_parts(parts, title, text, _snippet_workplace(title, location, text), None)
+
+    if source == "recruitee":
+        # Structured: remote/hybrid/on_site booleans and a country_code per location.
+        if job.get("hybrid"):
+            workplace = "hybrid"
+        elif job.get("remote") and not job.get("on_site"):
+            workplace = "remote"
+        elif job.get("on_site"):
+            workplace = "onsite"
+        else:
+            workplace = None
+        parts = [(loc.get("city") or loc.get("name") or "", loc.get("country_code") or loc.get("country"))
+                 for loc in job.get("locations") or []]
+        if not parts:
+            parts = [(job.get("city") or job.get("location") or "", job.get("country_code") or job.get("country"))]
+        parts = [(t, c) for t, c in parts if (t or "").strip() or c]
+        return _classify_parts(parts, title or job.get("title") or "", text, workplace, None)
+
+    if source == "personio":
+        # Only free text: the office name(s), e.g. "San José" or "Remote".
+        offices = [job.get("office") or ""] + list(job.get("additionalOffices") or [])
+        title = job.get("name") or title
+        return _classify_parts([(o, None) for o in offices if o.strip()], title, text, None, None)
 
     if source == "remotive":
         # Remote-only board; candidate_required_location says who may apply

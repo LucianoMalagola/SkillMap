@@ -1087,6 +1087,150 @@
     "description": "Description We are seeking a Public Health Data Analyst to support data analysis, data quality, visualization, and epidemiologic activities for public health surveillance programs. This position combines hands-on quantitative analysis with an understanding of epidemiology, surveillance systems, and public health data. The ideal candidate will bring a strong foundation in either public health surveillance, including syndromic surveillance and ESSENCE, or analytical programming and data analysis …",
     "salary_is_predicted": "1"
    }
+  },
+  {
+   "source": "recruitee",
+   "board": "primeworks",
+   "why": "Recruitee: structured remote flag + country_code",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 2683697,
+    "title": "Hospitality/Hotel Sales Representative",
+    "remote": true,
+    "hybrid": false,
+    "on_site": false,
+    "location": "Remote job",
+    "city": "Santo Domingo ",
+    "country": "Dominican Republic",
+    "country_code": "DO",
+    "locations": [
+     {
+      "name": "Santo Domingo ",
+      "city": "Santo Domingo ",
+      "country": "Dominican Republic",
+      "country_code": "DO"
+     }
+    ],
+    "description": "<p>We are seeking a highly motivated and customer-focused sales professional with experience in the hospitality industry to work with our client who owns several Hilton, Marriott, and Sheraton properties in the United States.. The ideal candidate has a strong background in hotel sales, exceptional customer support skills, and excellent English communication skills.</p><p style=\"min-height: 1.7em;\"></p><p>We only want the best and if you are looking to work with a fast-growing and stable American company, then this position is for you.</p><p style=\"min-height: 1.7em;\"></p><p><strong><u>Role and",
+    "requirements": "<ul><li><p>Bachelor degree</p></li><li><p>Previous experience in hospitality or hotel-related sales is required.</p></li><li><p>Proven experience in customer support or customer service.</p></li><li><p>Fluent English (spoken and written).</p></li><li><p>Strong communication, interpersonal, and probl",
+    "careers_url": "https://primeworks.recruitee.com/o/hospitalityhotel-sales-representative-4",
+    "published_at": "2026-07-20 22:11:58 UTC",
+    "salary": {
+     "max": null,
+     "min": null,
+     "period": null,
+     "currency": null
+    }
+   }
+  },
+  {
+   "source": "recruitee",
+   "board": "primeworks",
+   "why": "Recruitee: structured remote flag + country_code",
+   "expected": [
+    "CR",
+    "cr_location"
+   ],
+   "job": {
+    "id": 2683696,
+    "title": "Hospitality/Hotel Sales Representative",
+    "remote": true,
+    "hybrid": false,
+    "on_site": false,
+    "location": "Remote job",
+    "city": "San Jose",
+    "country": "Costa Rica",
+    "country_code": "CR",
+    "locations": [
+     {
+      "name": "Costa Rica",
+      "city": "San Jose",
+      "country": "Costa Rica",
+      "country_code": "CR"
+     }
+    ],
+    "description": "<p>We are seeking a highly motivated and customer-focused sales professional with experience in the hospitality industry to work with our client who owns several Hilton, Marriott, and Sheraton properties in the United States.. The ideal candidate has a strong background in hotel sales, exceptional customer support skills, and excellent English communication skills.</p><p style=\"min-height: 1.7em;\"></p><p>We only want the best and if you are looking to work with a fast-growing and stable American company, then this position is for you.</p><p style=\"min-height: 1.7em;\"></p><p><strong><u>Role and",
+    "requirements": "<ul><li><p>Bachelor degree</p></li><li><p>Previous experience in hospitality or hotel-related sales is required.</p></li><li><p>Proven experience in customer support or customer service.</p></li><li><p>Fluent English (spoken and written).</p></li><li><p>Strong communication, interpersonal, and probl",
+    "careers_url": "https://primeworks.recruitee.com/o/hospitalityhotel-sales-representative-3",
+    "published_at": "2026-07-20 22:04:46 UTC",
+    "salary": {
+     "max": null,
+     "min": null,
+     "period": null,
+     "currency": null
+    }
+   }
+  },
+  {
+   "source": "recruitee",
+   "board": "primeworks",
+   "why": "Recruitee: structured remote flag + country_code",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 2683694,
+    "title": "Hospitality/Hotel Sales Representative",
+    "remote": true,
+    "hybrid": false,
+    "on_site": false,
+    "location": "Remote job",
+    "city": "Bogota",
+    "country": "Colombia",
+    "country_code": "CO",
+    "locations": [
+     {
+      "name": "Cancun",
+      "city": "Bogota",
+      "country": "Colombia",
+      "country_code": "CO"
+     }
+    ],
+    "description": "<p>We are seeking a highly motivated and customer-focused sales professional with experience in the hospitality industry to work with our client who owns several Hilton, Marriott, and Sheraton properties in the United States.. The ideal candidate has a strong background in hotel sales, exceptional customer support skills, and excellent English communication skills.</p><p style=\"min-height: 1.7em;\"></p><p>We only want the best and if you are looking to work with a fast-growing and stable American company, then this position is for you.</p><p style=\"min-height: 1.7em;\"></p><p><strong><u>Role and",
+    "requirements": "<ul><li><p>Bachelor degree</p></li><li><p>Previous experience in hospitality or hotel-related sales is required.</p></li><li><p>Proven experience in customer support or customer service.</p></li><li><p>Fluent English (spoken and written).</p></li><li><p>Strong communication, interpersonal, and probl",
+    "careers_url": "https://primeworks.recruitee.com/o/hospitalityhotel-sales-representative-1",
+    "published_at": "2026-07-20 21:54:29 UTC",
+    "salary": {
+     "max": null,
+     "min": null,
+     "period": null,
+     "currency": null
+    }
+   }
+  },
+  {
+   "source": "personio",
+   "board": "demo",
+   "why": "Personio: office text only (München)",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "1822268",
+    "name": "Bewerberpool",
+    "office": "München",
+    "additionalOffices": [],
+    "createdAt": "2017-03-16T16:25:09+00:00",
+    "jobDescriptions": [
+     {
+      "name": "Ihre Aufgaben",
+      "value": "<p style=\"color:rgb(0,0,0);font-family:Verdana, Arial, Helvetica, sans-serif;font-size:12px;font-style:normal;font-weight:normal;background-color:rgb(255,255,255);\">Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat"
+     },
+     {
+      "name": "Ihr Profil",
+      "value": "<p style=\"color:rgb(0,0,0);font-family:Verdana, Arial, Helvetica, sans-serif;font-size:12px;font-style:normal;font-weight:normal;background-color:rgb(255,255,255);\">Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat"
+     },
+     {
+      "name": "Warum wir?",
+      "value": "<p style=\"color:rgb(0,0,0);font-family:Verdana, Arial, Helvetica, sans-serif;font-size:12px;font-style:normal;font-weight:normal;background-color:rgb(255,255,255);\">Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat"
+     }
+    ]
+   }
   }
  ]
 }

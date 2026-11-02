@@ -1,5 +1,6 @@
 """
-SkillMap: extract job postings from public ATS job boards (Greenhouse, Lever, Ashby).
+SkillMap: extract job postings from public ATS job boards (Greenhouse, Lever, Ashby,
+Recruitee, Personio).
 
 Reads etl/companies.csv and, for each board, saves the full, unfiltered API
 response exactly as received to:
@@ -22,6 +23,7 @@ Usage:
 
 import argparse
 import csv
+import xml.etree.ElementTree as ET
 import json
 import re
 import sys
@@ -32,25 +34,22 @@ from urllib.parse import quote
 
 import requests
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from normalize import parse_board  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_COMPANIES = ROOT / "etl" / "companies.csv"
 RAW_DIR = ROOT / "data" / "raw"
 
-# Per-ATS endpoint (the variant that includes full descriptions) and where the
-# job list lives in the response.
+# Per-ATS endpoint: the variant that includes full descriptions. All are official,
+# documented public endpoints (see docs/SOURCES.md). normalize.parse_board() knows where
+# the job list lives in each format.
 ATS = {
-    "greenhouse": {
-        "url": "https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true",
-        "jobs": lambda payload: payload["jobs"],
-    },
-    "lever": {
-        "url": "https://api.lever.co/v0/postings/{token}?mode=json",
-        "jobs": lambda payload: payload,          # the response is the list itself
-    },
-    "ashby": {
-        "url": "https://api.ashbyhq.com/posting-api/job-board/{token}?includeCompensation=true",
-        "jobs": lambda payload: payload["jobs"],
-    },
+    "greenhouse": {"url": "https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true"},
+    "lever": {"url": "https://api.lever.co/v0/postings/{token}?mode=json"},
+    "ashby": {"url": "https://api.ashbyhq.com/posting-api/job-board/{token}?includeCompensation=true"},
+    "recruitee": {"url": "https://{token}.recruitee.com/api/offers/"},
+    "personio": {"url": "https://{token}.jobs.personio.de/xml"},
 }
 
 REQUEST_DELAY = 1.0      # seconds between boards (be polite)
@@ -95,8 +94,8 @@ def extract_board(company: dict, out_dir: Path) -> dict:
         response = fetch(url)
         if response.status_code != 200:
             return {**entry, "status": "error", "error": f"HTTP {response.status_code}"}
-        n_jobs = len(ATS[ats]["jobs"](response.json()))   # also checks the body is valid JSON
-    except (RuntimeError, ValueError, KeyError, TypeError) as err:
+        n_jobs = len(parse_board(ats, response.content))   # also checks the body parses
+    except (RuntimeError, ValueError, KeyError, TypeError, ET.ParseError) as err:
         return {**entry, "status": "error", "error": str(err) or type(err).__name__}
 
     out_file = out_dir / f"{safe_filename(token)}.json"

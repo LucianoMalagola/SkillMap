@@ -23,6 +23,7 @@ import json
 import re
 import sys
 import threading
+import xml.etree.ElementTree as ET
 import time
 from urllib.parse import urlsplit
 from urllib.parse import quote
@@ -31,6 +32,9 @@ from datetime import date
 from pathlib import Path
 
 import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from normalize import parse_board  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CANDIDATES = ROOT / "etl" / "company_candidates.csv"
@@ -42,6 +46,8 @@ ENDPOINTS = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{token}/jobs",
     "lever": "https://api.lever.co/v0/postings/{token}?mode=json",
     "ashby": "https://api.ashbyhq.com/posting-api/job-board/{token}",
+    "recruitee": "https://{token}.recruitee.com/api/offers/",
+    "personio": "https://{token}.jobs.personio.de/xml",
 }
 GREENHOUSE_BOARD_INFO = "https://boards-api.greenhouse.io/v1/boards/{token}"
 REQUEST_DELAY = 0.5  # seconds each worker waits after a request
@@ -95,6 +101,15 @@ def normalize_jobs(ats: str, payload) -> list[dict]:
             locs = cats.get("allLocations") or [cats.get("location", "")]
             jobs.append({"title": j.get("text", ""), "location": " | ".join(filter(None, locs))})
         return jobs
+    if ats == "recruitee":
+        return [{"title": j.get("title", ""),
+                 "location": " | ".join(filter(None, [l.get("city") or l.get("name") for l in j.get("locations") or []]
+                                               + [l.get("country") for l in j.get("locations") or []]
+                                               + (["Remote"] if j.get("remote") else [])))}
+                for j in payload.get("offers", [])]
+    if ats == "personio":
+        return [{"title": j.get("name", ""), "location": " | ".join(filter(None, [j.get("office")] + j.get("additionalOffices", [])))}
+                for j in payload]
     if ats == "ashby":
         jobs = []
         for j in payload.get("jobs", []):
@@ -133,8 +148,9 @@ def probe(ats: str, token: str) -> dict:
     if response.status_code != 200:
         return result
     try:
-        jobs = normalize_jobs(ats, response.json())
-    except (ValueError, AttributeError):
+        payload = parse_board("personio", response.content) if ats == "personio" else response.json()
+        jobs = normalize_jobs(ats, payload)
+    except (ValueError, AttributeError, ET.ParseError):
         result["status"] = "bad json"
         return result
 

@@ -49,13 +49,13 @@ from psycopg.types.json import Jsonb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from location import classify_posting  # noqa: E402
-from normalize import ATS_SOURCES, detect_modality, is_placeholder, normalize  # noqa: E402
+from normalize import ATS_SOURCES, detect_modality, is_placeholder, normalize, parse_board  # noqa: E402
 from roles import classify_title  # noqa: E402
 from skills import SkillExtractor  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"
-SOURCES = ("greenhouse", "lever", "ashby", "jooble", "adzuna", "remotive")
+SOURCES = ("greenhouse", "lever", "ashby", "recruitee", "personio", "jooble", "adzuna", "remotive")
 STALE_DAYS = 14
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -84,8 +84,9 @@ def read_raw(source: str, day_dir: Path) -> tuple[list[tuple[str, dict]], list[s
             if board["status"] != "ok":
                 failed += 1
                 continue
-            payload = json.loads((day_dir / board["file"]).read_text(encoding="utf-8"))
-            for job in (payload if source == "lever" else payload["jobs"]):
+            for job in parse_board(source, (day_dir / board["file"]).read_bytes()):
+                if source == "personio":
+                    job["_board_token"] = board["board_token"]   # needed to build the posting URL
                 items.append((board["company"], job))
             ok_companies.append(board["company"])
         return items, ok_companies, failed, False

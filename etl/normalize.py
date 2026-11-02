@@ -12,14 +12,47 @@ Sources: greenhouse, lever, ashby (full descriptions) and jooble (snippets).
 from __future__ import annotations
 
 import html
+import json
 import re
 import unicodedata
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-ATS_SOURCES = ("greenhouse", "lever", "ashby")
+ATS_SOURCES = ("greenhouse", "lever", "ashby", "recruitee", "personio")
 FULL_TEXT_SOURCES = ATS_SOURCES + ("remotive",)     # description_is_full = TRUE
 SNIPPET_SOURCES = ("jooble", "adzuna")
+
+# ---- raw board responses -> list of jobs --------------------------------------------------
+
+def _personio_positions(raw: bytes | str) -> list[dict]:
+    """Personio XML feed (<workzag-jobs><position>...) -> list of dicts."""
+    root = ET.fromstring(raw if isinstance(raw, (bytes, bytearray)) else raw.encode("utf-8"))
+    jobs = []
+    for pos in root.findall("position"):
+        job = {child.tag: (child.text or "").strip() for child in pos if len(child) == 0}
+        job["additionalOffices"] = [o.text.strip() for o in pos.findall("additionalOffices/office") if o.text]
+        job["jobDescriptions"] = [
+            {"name": (d.findtext("name") or "").strip(), "value": (d.findtext("value") or "").strip()}
+            for d in pos.findall("jobDescriptions/jobDescription")
+        ]
+        jobs.append(job)
+    return jobs
+
+
+def parse_board(source: str, raw: bytes | str) -> list[dict]:
+    """The list of jobs in one raw ATS board response, whatever the platform's format."""
+    if source == "personio":
+        return _personio_positions(raw)
+    payload = json.loads(raw)
+    if source == "lever":
+        return payload
+    if source == "recruitee":
+        return payload["offers"]
+    if source in ("greenhouse", "ashby"):
+        return payload["jobs"]
+    raise ValueError(f"unknown ATS source: {source}")
+
 
 # ---- HTML -> text ------------------------------------------------------------------------
 
@@ -137,6 +170,7 @@ def _parse_datetime(value) -> datetime | None:
 # Annualise so salary_min/max are comparable. Hourly is skipped: it would need an
 # assumption about hours per year.
 _LEVER_INTERVALS = {"per-year-salary": 1, "per-month-salary": 12, "bi-week-salary": 26}
+_RECRUITEE_PERIODS = {"year": 1, "yearly": 1, "month": 12, "monthly": 12}
 _ASHBY_INTERVALS = {"1 YEAR": 1, "1 MONTH": 12, "2 WEEK": 26}
 _GH_PAY_RANGE = re.compile(r'<div class="pay-range">(.*?)</div>', re.S)
 _GH_TITLE = re.compile(r'<div class="title">(.*?)</div>', re.S)
@@ -182,6 +216,14 @@ def _salary_from_text(text: str | None) -> tuple[float | None, float | None, str
 
 
 def _salary(source: str, job: dict) -> tuple[float | None, float | None, str | None]:
+    if source == "recruitee":
+        sal = job.get("salary") or {}
+        factor = _RECRUITEE_PERIODS.get(str(sal.get("period") or "").lower())
+        low = _number(str(sal.get("min"))) if sal.get("min") is not None else None
+        if factor and low:
+            high = _number(str(sal.get("max"))) if sal.get("max") is not None else low
+            return low * factor, (high or low) * factor, sal.get("currency")
+        return None, None, None
     if source == "remotive":
         return _salary_from_text(job.get("salary"))
     if source == "adzuna":
@@ -227,6 +269,32 @@ def _lever_text(job: dict) -> str:
     return "\n\n".join(t.strip() for t in (body, lists, extra) if t and t.strip())
 
 
+def _recruitee_workplace(job: dict) -> str | None:
+    if job.get("hybrid"):
+        return "hybrid"
+    if job.get("remote") and not job.get("on_site"):
+        return "remote"
+    if job.get("on_site") and not job.get("remote"):
+        return "onsite"
+    return None
+
+
+def _recruitee_locations(job: dict) -> str:
+    locs = []
+    for loc in job.get("locations") or []:
+        place = ", ".join(x.strip() for x in (loc.get("city") or loc.get("name") or "", loc.get("country") or "") if x and x.strip())
+        if place and place not in locs:
+            locs.append(place)
+    if not locs:
+        place = ", ".join(x.strip() for x in (job.get("city") or "", job.get("country") or "") if x and x.strip())
+        locs = [place or (job.get("location") or "")]
+    return " | ".join(l for l in locs if l)
+
+
+def _personio_text(job: dict) -> str:
+    return "\n\n".join(f"{d['name']}\n{clean_html(d['value'])}".strip() for d in job.get("jobDescriptions") or [])
+
+
 def _ashby_locations(job: dict) -> str:
     locs = [job.get("location") or ""] + [s.get("location") or "" for s in job.get("secondaryLocations") or []]
     return " | ".join(loc.strip() for loc in locs if loc.strip())
@@ -257,6 +325,21 @@ def normalize(source: str, job: dict, company: str) -> dict:
                       description=clean_html(job.get("snippet")), url=job.get("link"),
                       posted_at=_parse_datetime(job.get("updated")), workplace_type=None)
         company = job.get("company") or company
+    elif source == "recruitee":
+        fields = dict(external_id=str(job["id"]), title=job.get("title"), location_raw=_recruitee_locations(job),
+                      description="\n\n".join(t for t in (clean_html(job.get("description")),
+                                                            clean_html(job.get("requirements"))) if t),
+                      url=job.get("careers_url"),
+                      posted_at=_parse_datetime(str(job.get("published_at") or "").replace(" UTC", "+00:00")),
+                      workplace_type=_recruitee_workplace(job))
+    elif source == "personio":
+        offices = [job.get("office") or ""] + list(job.get("additionalOffices") or [])
+        token = job.get("_board_token")
+        fields = dict(external_id=str(job["id"]), title=job.get("name"),
+                      location_raw=" | ".join(o for o in offices if o),
+                      description=_personio_text(job),
+                      url=f"https://{token}.jobs.personio.de/job/{job['id']}" if token else None,
+                      posted_at=_parse_datetime(job.get("createdAt")), workplace_type=None)
     elif source == "remotive":
         fields = dict(external_id=str(job["id"]), title=job.get("title"),
                       location_raw=job.get("candidate_required_location"),

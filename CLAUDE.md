@@ -32,6 +32,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - Branch `main`: production, read by dashboards. Branch `dev` (`br-polished-grass-b790an0o`): development/testing.
 - **Always develop and test against `dev`.** Only point at `main` when the pipeline is ready.
 - Schema: `sql/01_schema.sql`, seed dictionary: `sql/02_seed_skills.sql` (applied to both branches).
+  `sql/06_ats_sources.sql`: `source` CHECK + 'recruitee', 'personio': **dev only**.
   `sql/05_views_full_text.sql`: `v_skill_demand` and `v_skill_cooccurrence` use only
   `description_is_full = TRUE` (numerator and denominator); `v_modality_mix` keeps all rows: **dev only**.
   `sql/04_seed_web_analytics.sql` (Google Analytics, Adobe Analytics, Google Tag Manager; no `gtm`
@@ -147,6 +148,9 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       LATAM country is out of scope; 2+ LATAM countries or "Anywhere"/"Worldwide" → LATAM-remote;
       country-level "United States" with no remote flag → US-remote only if the description says
       remote/distributed; "Remote" + 2+ US state names in the text → US-remote.
+- [x] Recruitee (`{co}.recruitee.com/api/offers/`) and Personio (`{co}.jobs.personio.de/xml`) supported in
+      discovery, extraction and transform (`normalize.parse_board` handles every ATS format, incl.
+      Personio XML). Recruitee: remote/hybrid/on_site booleans + country_code; Personio: office text only.
 - [x] `etl/extract_ats.py`: all boards in `etl/companies.csv`, raw bodies saved byte-for-byte to
       `data/raw/<ats>/<date>/<token>.json` + `_manifest.json` (status / n_jobs / file per board;
       partial re-runs merge into it). Sequential, 1 s between boards, retries on network/429/5xx;

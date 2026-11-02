@@ -230,3 +230,40 @@ CM_BOILERPLATE = (
 ])
 def test_is_placeholder(description, expected):
     assert is_placeholder(description) is expected
+
+
+# ---- Recruitee and Personio ----------------------------------------------------------------------
+from normalize import parse_board  # noqa: E402
+
+PERSONIO_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<workzag-jobs><position><id>1822268</id><office>San Jos\xc3\xa9</office>
+<additionalOffices><office>Remote</office></additionalOffices>
+<name>Data Analyst</name><createdAt>2026-10-01T10:00:00+00:00</createdAt>
+<jobDescriptions><jobDescription><name>Your tasks</name><value>&lt;ul&gt;&lt;li&gt;SQL and Power BI reporting&lt;/li&gt;&lt;/ul&gt;</value></jobDescription></jobDescriptions>
+</position></workzag-jobs>"""
+
+
+def test_personio_parse_and_normalize():
+    jobs = parse_board("personio", PERSONIO_XML)
+    assert len(jobs) == 1 and jobs[0]["office"] == "San José" and jobs[0]["additionalOffices"] == ["Remote"]
+    jobs[0]["_board_token"] = "acme"
+    n = normalize("personio", jobs[0], "Acme")
+    assert n["title"] == "Data Analyst" and n["location_raw"] == "San José | Remote"
+    assert "SQL and Power BI reporting" in n["description"] and n["url"] == "https://acme.jobs.personio.de/job/1822268"
+    assert classify_posting("personio", jobs[0]) == ("CR", "cr_location")
+
+
+def test_recruitee_structured_fields():
+    offer = {"id": 1, "title": "BI Analyst", "remote": False, "hybrid": True, "on_site": False,
+             "locations": [{"city": "Heredia", "country": "Costa Rica", "country_code": "CR"}],
+             "description": "<p>Build Power BI dashboards.</p>", "requirements": "<ul><li>SQL</li></ul>",
+             "careers_url": "https://x.recruitee.com/o/bi-analyst", "published_at": "2026-07-20 22:11:58 UTC",
+             "salary": {"min": "2000", "max": "3000", "period": "month", "currency": "USD"}}
+    n = normalize("recruitee", offer, "X")
+    assert n["workplace_type"] == "hybrid" and n["location_raw"] == "Heredia, Costa Rica"
+    assert "Power BI" in n["description"] and "SQL" in n["description"]
+    assert (n["salary_min"], n["salary_max"]) == (24000, 36000) and n["posted_at"].year == 2026
+    assert classify_posting("recruitee", offer) == ("CR", "cr_location")
+    remote_do = {**offer, "remote": True, "hybrid": False,
+                 "locations": [{"city": "Santo Domingo", "country": "Dominican Republic", "country_code": "DO"}]}
+    assert classify_posting("recruitee", remote_do) == (None, "out_of_scope")   # one non-CR LATAM country
