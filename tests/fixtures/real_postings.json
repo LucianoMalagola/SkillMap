@@ -1,0 +1,1022 @@
+{
+ "collected": "2026-11-01",
+ "note": "Real postings from public ATS boards / Jooble; location fields verbatim, descriptions trimmed to the relevant sentences.",
+ "postings": [
+  {
+   "source": "greenhouse",
+   "board": "criticalmass",
+   "why": "CR office",
+   "expected": [
+    "CR",
+    "cr_location"
+   ],
+   "job": {
+    "id": 7608503,
+    "title": "2026. Project Manager (Associate - Mid - Senior)",
+    "location": {
+     "name": "San Jose, Costa Rica"
+    },
+    "offices": [],
+    "absolute_url": "https://job-boards.greenhouse.io/criticalmass/jobs/7608503",
+    "content": "The Critical Mass Talent Acquisition team will only communicate from email addresses that use the URLs criticalmass.com, omc.com and us.greenhouse-mail.io . We will never ask you to send us money, technology, or anything else to work for our company. If U.S. based: https://www.gov.uk/consumer-protection-rights If Costa Rica based: https://www.consumo.go.cr/educacion_consumidor/consejos_practicos.aspx"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "newsela",
+   "why": "LATAM country list including Costa Rica",
+   "expected": [
+    "CR",
+    "cr_location"
+   ],
+   "job": {
+    "id": 8080744,
+    "title": "Contractor: Lead Analytics Engineer",
+    "location": {
+     "name": "Remote - Argentina; Brazil;Chile; Costa Rica"
+    },
+    "offices": [
+     {
+      "id": 89547,
+      "name": "Remote - LATAM Contractor",
+      "location": "LATAM",
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/newsela/jobs/8080744",
+    "content": "#LI-Remote"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "newsela",
+   "why": "bare Remote, office LATAM",
+   "expected": [
+    "LATAM-remote",
+    "ambiguous_resolved_gh_office"
+   ],
+   "job": {
+    "id": 8335463,
+    "title": "Director, Sales (Core & Supplemental)",
+    "location": {
+     "name": "Remote "
+    },
+    "offices": [
+     {
+      "id": 89547,
+      "name": "Remote - LATAM Contractor",
+      "location": "LATAM",
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/newsela/jobs/8335463",
+    "content": "Data-Driven Operations: Oversee accurate CRM usage (Salesforce) and leverage modern AI sales tools to optimize territory prioritization, deal flow analytics, and operational efficiency across the leadership hierarchy. Education & Authorization: Bachelor’s degree in Business, Education, or related field (or equivalent practical experience); legally authorized to work in the US. Work From Home: We are a fully remote company. #LI-Remote"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "mozilla",
+   "why": "bare Remote, office Remote Germany",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 8248113,
+    "title": "Policy Communications Lead, Europe",
+    "location": {
+     "name": "Remote"
+    },
+    "offices": [
+     {
+      "id": 52713,
+      "name": "Remote Germany",
+      "location": null,
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/mozilla/jobs/8248113",
+    "content": "Join us to influence the future of tech policy! Mozilla is looking for an experienced Policy Communications Europe Lead to help set the public narrative on the role our browser, Firefox, and browser engine, Gecko, play in order to keep the web open. The Role As Policy Communications Lead for Europe, you will: Sit in the Comms, Marketing & Policy organisation, reporting to the Head of Public Policy, Europe. Focus on Europe as your key region, but be able and ready to apply your skills to emerging key markets for Firefox on other continents. Confidence operating in a global, remote, and mission-"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "mozilla",
+   "why": "bare Remote, office Remote US",
+   "expected": [
+    "US-remote",
+    "ambiguous_resolved_gh_office"
+   ],
+   "job": {
+    "id": 7114644,
+    "title": "Staff Data Scientist, Ads",
+    "location": {
+     "name": "Remote"
+    },
+    "offices": [
+     {
+      "id": 77552,
+      "name": "Remote US",
+      "location": null,
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/mozilla/jobs/7114644",
+    "content": "Along with thousands of volunteer contributors and collaborators all over the world, Mozillians design, build and distribute open-source software that enables people to enjoy the internet on their terms. And you give us a chance to make a difference in your life every single day. Join us to work on the Web as the platform and help create more opportunity and innovation for everyone online. Please contact us at hiringaccommodation@mozilla.com to request accommodation."
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "mozilla",
+   "why": "title names France; description mentions US",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 8304172,
+    "title": "Firefox Enterprise Partnership Lead (France)",
+    "location": {
+     "name": "Remote"
+    },
+    "offices": [
+     {
+      "id": 77539,
+      "name": "Remote France",
+      "location": null,
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/mozilla/jobs/8304172",
+    "content": "Along with thousands of volunteer contributors and collaborators all over the world, Mozillians design, build and distribute open-source software that enables people to enjoy the internet on their terms. What you’ll do: Build and manage relationships with selected technology, cloud, public-sector, integration, and service partners in France Identify and qualify new partners based on customer access, technical capabilities, delivery capacity, and revenue potential Map each partner’s objectives, decision-makers, capabilities, customers, and expected contribution Create a joint plan for each stra"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "reddit",
+   "why": "location wins over HQ office San Francisco",
+   "expected": [
+    "US-remote",
+    "us_remote"
+   ],
+   "job": {
+    "id": 8282760,
+    "title": "Analytics Engineer",
+    "location": {
+     "name": "Remote - United States"
+    },
+    "offices": [
+     {
+      "id": 10167,
+      "name": "San Francisco",
+      "location": "San Francisco, CA, United States",
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/reddit/jobs/8282760",
+    "content": "Your work will empower thousands of your colleagues to improve the user experience and grow our consumer base. Check out our r/RedditEng post to learn more about the team, and what we do: https://www.reddit.com/r/RedditEng/comments/1mnmf71/analytics_engineering_reddit/ Benefits: Comprehensive Healthcare Benefits and Income Replacement Programs 401k with Employer Match Global Benefit programs that fit your lifestyle, from workspace to professional development to caregiving support Family Planning Support Gender-Affirming Care Mental Health & Coaching Benefits Flexible Vacation & Paid Volunteer "
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "coinbase",
+   "why": "hybrid US",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 8175363,
+    "title": "Acceleration Programs Intern",
+    "location": {
+     "name": "Hybrid - New York, NY"
+    },
+    "offices": [
+     {
+      "id": 76481,
+      "name": "US - Remote Zone 1 (Job Requisitions Only)",
+      "location": null,
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://www.coinbase.com/careers/positions/8175363?gh_jid=8175363",
+    "content": "Coinbase is a remote-first, but not remote-only company. What you'll do: Support program design by actively contributing to brainstorms, working sessions, and development of project plans, timelines, and deliverables Partner with Talent Density team members and cross-functional People Team partners to execute program logistics end-to-end Gather and analyze feedback from various sources to assess program effectiveness and contribute actionable recommendations for future iterations Build and maintain documentation for new and existing processes to ensure scalability and clear communication acros"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "coinbase",
+   "why": "remote outside scope",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 8164862,
+    "title": "Accounting Manager, Tokenized Equities",
+    "location": {
+     "name": "Remote - Abu Dhabi"
+    },
+    "offices": [
+     {
+      "id": 113950,
+      "name": "Remote - United Arab Emirates",
+      "location": null,
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://www.coinbase.com/careers/positions/8164862?gh_jid=8164862",
+    "content": "Coinbase is a remote-first, but not remote-only company. Coinbase Tokenized Equities give eligible non-US users a simple way to buy tokens backed 1:1 by US stocks and ETFs — no brokerage account needed. This includes liaising with the regulator to ensure a consistent understand of the rules, building a robust, efficient and well controlled reporting process and remaining responsive ad hoc queries Partner with Product, Engineering, Legal, Tax, Compliance, Treasury, FP&A, and Finance Data so new flows are accurate, controlled, and scalable Sign off on flow of funds, posting rules, account setup,"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "elastic",
+   "why": "country-level US, no remote flag",
+   "expected": [
+    "US-remote",
+    "us_region_remote_in_text"
+   ],
+   "job": {
+    "id": 8148720,
+    "title": "ABM Manager, Global Public Sector",
+    "location": {
+     "name": "United States"
+    },
+    "offices": [
+     {
+      "id": 73204,
+      "name": "United States",
+      "location": null,
+      "child_ids": [
+       51927,
+       69277,
+       85933,
+       87403,
+       20729,
+       20746,
+       20743,
+       44935,
+       44931,
+       44937,
+       44936
+      ],
+      "parent_id": 79984
+     }
+    ],
+    "absolute_url": "https://jobs.elastic.co/jobs?gh_jid=8148720&gh_jid=8148720",
+    "content": "The typical starting salary range for this role is: $106,900 — $169,100 USD The typical starting salary range for this role in the select locations listed above is: $128,200 — $202,700 USD Additional Information - We Take Care of Our People As a distributed company, diversity drives our identity. Applicants have rights under Federal Employment Laws, view posters linked below: Family and Medical Leave Act (FMLA) Poster; Pay Transparency Nondiscrimination Provision Poster; Employee Polygraph Protection Act (EPPA) Poster and Know Your Rights (Poster) Elasticsearch develops and distributes technol"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "datacor",
+   "why": "International + office Remote - US",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 5200122007,
+    "title": "Senior Solution Engineer, Global ",
+    "location": {
+     "name": "Remote, International"
+    },
+    "offices": [
+     {
+      "id": 4018891007,
+      "name": "Remote - US",
+      "location": null,
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/datacor/jobs/5200122007",
+    "content": "About Us: Datacor is the leading provider of software solutions, including ERP, CRM, Asset Tracking, Simulation and Formulation, to the process manufacturing space. You will be our dedicated technical presence outside the Americas, based in Europe or the Middle East and covering European, Middle Eastern, African, and APAC markets. You will own Flow Simulation pre-sales from day one, delivering discovery, demonstrations, and technical support across the full sales cycle, partnering with Account Executives across Europe, the Middle East and Africa, and APAC. What You Will Do: Pre-Sales Coverage:"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "datacor",
+   "why": "CR",
+   "expected": [
+    "CR",
+    "cr_location"
+   ],
+   "job": {
+    "id": 5252619007,
+    "title": "Finance Operations Specialist",
+    "location": {
+     "name": "San Jose, Costa Rica"
+    },
+    "offices": [
+     {
+      "id": 4035541007,
+      "name": "International - Costa Rica",
+      "location": null,
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/datacor/jobs/5252619007",
+    "content": "About Us: Datacor is the leading provider of software solutions, including ERP, CRM, Asset Tracking, Simulation and Formulation, to the process manufacturing space. The Role This role partners with our global go-to-market teams to manage the full order-to-cash lifecycle - from contract preparation and order processing to license distribution, invoicing, recurring revenue renewals, and monthly service billing. Responsibilities GTM Support and Order Fulfilment Support the global sales team in preparing proposals and collecting signatures using our esignature platform Create, revise, and distribu"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "gitlab",
+   "why": "2 LATAM countries + US",
+   "expected": [
+    "LATAM-remote",
+    "latam_multi_country"
+   ],
+   "job": {
+    "id": 8637426002,
+    "title": "Customer Success Engineer, LATAM (Spanish, Portugese) ",
+    "location": {
+     "name": "Remote, Brazil; Remote, Mexico; Remote, United States"
+    },
+    "offices": [],
+    "absolute_url": "https://job-boards.greenhouse.io/gitlab/jobs/8637426002",
+    "content": "Co-create the future with us as we build technology that transforms how the world develops software. * Fortune 500® is a registered trademark of Fortune Media IP Limited, used under license. Your first-year outcomes will focus on building trusted advisor relationships, enabling successful customer implementations, and creating reusable workshops and technical content that helps customers adopt GitLab at scale. Develop and deliver workshops, demos, and other reusable enablement content in collaboration with cross-functional partners. Located in the United States, Mexico, and Brazil. A continuou"
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "oscar",
+   "why": "city-level US, on-site",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 8303593,
+    "title": "Actuarial Analyst, Valuation",
+    "location": {
+     "name": "New York, New York, United States"
+    },
+    "offices": [
+     {
+      "id": 1117,
+      "name": "New York, NY",
+      "location": "New York, New York, United States",
+      "child_ids": [],
+      "parent_id": null
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/oscar/jobs/8303593",
+    "content": ""
+   }
+  },
+  {
+   "source": "greenhouse",
+   "board": "oscar",
+   "why": "bare Remote, US office",
+   "expected": [
+    "US-remote",
+    "ambiguous_resolved_gh_office"
+   ],
+   "job": {
+    "id": 8225598,
+    "title": "Advanced Practice Provider - Virtual Health Assessment (Part Time)",
+    "location": {
+     "name": "Remote"
+    },
+    "offices": [
+     {
+      "id": 69320,
+      "name": "Remote (Georgia)",
+      "location": "Georgia, United States",
+      "child_ids": [],
+      "parent_id": 67492
+     }
+    ],
+    "absolute_url": "https://job-boards.greenhouse.io/oscar/jobs/8225598",
+    "content": "We're hiring a Nurse Practitioner and Physician Assistant to join our remote Virtual Health Assessment team in a part time capacity. To help us achieve that goal we are looking for innovative leaders who think big and push boundaries to better healthcare and the healthcare delivery system. Part-Time Shift: 4x5 | 3:00 pm - 8:00 pm; 20 hrs a week is required Work Location: This is a remote position, open to candidates who reside in: Arizona; Arkansas; California; Colorado; District of Columbia; Florida; Georgia; Illinois; Massachusetts; Michigan; Nevada; New Hampshire; New Jersey; New York; Nort"
+   }
+  },
+  {
+   "source": "lever",
+   "board": "bluelightconsulting",
+   "why": "CR copy of a per-country posting",
+   "expected": [
+    "CR",
+    "cr_location"
+   ],
+   "job": {
+    "id": "1453791f-3434-431f-983a-bba4f1317f4c",
+    "text": "Full Stack and Backend NodeJS TypeScript/JavaScript Engineer (Senior) - Latin America, Remote",
+    "categories": {
+     "commitment": "Full-Time",
+     "department": "Engineering",
+     "location": "Heredia, Costa Rica",
+     "team": "Software Development",
+     "allLocations": [
+      "Heredia, Costa Rica"
+     ]
+    },
+    "country": "CR",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/bluelightconsulting/1453791f-3434-431f-983a-bba4f1317f4c",
+    "descriptionPlain": "With a presence across the United States and Central/South America, Bluelight is in an exciting phase of expansion, continually seeking exceptional talent to join its dynamic and diverse community. If you are passionate about software development and eager to be part of a growing software consultancy, we invite you to apply and join us on this exciting journey. Requirements: 5+ years professional software development experience (backend-focused) Strong professional experience with Node.js, TypeScript, and JavaScript Experience building low-latency API services in AWS Experience building scalab"
+   }
+  },
+  {
+   "source": "lever",
+   "board": "bluelightconsulting",
+   "why": "single non-CR LATAM country",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "4aa08bb3-14e5-4bba-9165-64857ba4a2f8",
+    "text": "Data Engineer, Azure - Remote, Latin America",
+    "categories": {
+     "commitment": "Full-Time",
+     "department": "Engineering",
+     "location": "Managua, Nicaragua",
+     "team": "Software Development",
+     "allLocations": [
+      "Managua, Nicaragua"
+     ]
+    },
+    "country": "NI",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/bluelightconsulting/4aa08bb3-14e5-4bba-9165-64857ba4a2f8",
+    "descriptionPlain": "With a presence across the United States and Central/South America, Bluelight is in an exciting phase of expansion, continually seeking exceptional talent to join its dynamic and diverse community. If you are passionate about software development and eager to be part of a growing software consultancy, we invite you to apply and join us on this exciting journey. Generous paid-time-off policy Flexible working hours Work remotely Continuing education, training, conferences Company-sponsored coursework, exams, and certifications Being a consultant in our team is a fun, challenging, and rewarding c"
+   }
+  },
+  {
+   "source": "lever",
+   "board": "bluelightconsulting",
+   "why": "region text + country BR",
+   "expected": [
+    "LATAM-remote",
+    "latam_region"
+   ],
+   "job": {
+    "id": "57c28353-059e-4325-a8b0-679398eb48a0",
+    "text": "Full Stack and Backend NodeJS TypeScript/JavaScript Engineer (Senior) - Latin America, Remote",
+    "categories": {
+     "commitment": "Full-Time",
+     "department": "Engineering",
+     "location": "South America",
+     "team": "Software Development",
+     "allLocations": [
+      "South America"
+     ]
+    },
+    "country": "BR",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/bluelightconsulting/57c28353-059e-4325-a8b0-679398eb48a0",
+    "descriptionPlain": "With a presence across the United States and Central/South America, Bluelight is in an exciting phase of expansion, continually seeking exceptional talent to join its dynamic and diverse community. If you are passionate about software development and eager to be part of a growing software consultancy, we invite you to apply and join us on this exciting journey. Requirements: 5+ years professional software development experience (backend-focused) Strong professional experience with Node.js, TypeScript, and JavaScript Experience building low-latency API services in AWS Experience building scalab"
+   }
+  },
+  {
+   "source": "lever",
+   "board": "cscgeneration-2",
+   "why": "US state abbreviation, not Melbourne AU",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "7b69b064-521c-48e6-acc5-2650f7d29bfb",
+    "text": "Assistant Store Manager (Sur La Table)",
+    "categories": {
+     "commitment": "Full Time",
+     "department": "Sur La Table- Stores",
+     "location": "Melbourne, FL",
+     "team": "173 - Avenue Viera - Sur La Table, 2261 Town Center Ave., Ste 103, Melbourne, FL 32940",
+     "allLocations": [
+      "Melbourne, FL"
+     ]
+    },
+    "country": "US",
+    "workplaceType": "onsite",
+    "hostedUrl": "https://jobs.lever.co/cscgeneration-2/7b69b064-521c-48e6-acc5-2650f7d29bfb",
+    "descriptionPlain": "With over 58 stores and the largest avocational cooking program in the US, Sur La Table offers an unsurpassed selection of exclusive and premium-quality goods for the kitchen and table – and the culinary expertise and inspiration to go along with it. If you would like more information about how your data is processed, please contact us. Washington state applicants only: If you believe that this job posting does not comply with applicable Washington state law, please notify us by sending an email to WACandidates@cscshared.com."
+   }
+  },
+  {
+   "source": "lever",
+   "board": "cscgeneration-2",
+   "why": "Anywhere but country IN",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "aaf1e51d-c4cb-4565-8455-f0513ebbb2b9",
+    "text": "Senior Frontend Engineer",
+    "categories": {
+     "commitment": "Full Time",
+     "department": "CSC GENERATION (Shared Services- India)",
+     "location": "Anywhere",
+     "team": "Engineering",
+     "allLocations": [
+      "Anywhere"
+     ]
+    },
+    "country": "IN",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/cscgeneration-2/aaf1e51d-c4cb-4565-8455-f0513ebbb2b9",
+    "descriptionPlain": ""
+   }
+  },
+  {
+   "source": "lever",
+   "board": "atmosera",
+   "why": "LATAM region + country MX",
+   "expected": [
+    "LATAM-remote",
+    "latam_region"
+   ],
+   "job": {
+    "id": "8f982445-8cde-4fc9-94f0-1e2948630584",
+    "text": "Cloud Desktop Support Technician, 3rd Shift (Remote LATAM)",
+    "categories": {
+     "commitment": "Contract - LATAM",
+     "department": "Managed Services",
+     "location": "Remote - LATAM - MEX",
+     "team": "Client Operations",
+     "allLocations": [
+      "Remote - LATAM - MEX",
+      "Remote - LATAM - ARG",
+      "Remote - LATAM - COL",
+      "Remote - LATAM - CHL",
+      "Remote - LATAM - DOM",
+      "Remote - LATAM - ECU",
+      "Remote - LATAM - HND",
+      "Remote - LATAM - PAN",
+      "Remote - LATAM - PER",
+      "Remote - LATAM - SLV",
+      "Remote - LATAM - URY"
+     ]
+    },
+    "country": "MX",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/atmosera/8f982445-8cde-4fc9-94f0-1e2948630584",
+    "descriptionPlain": ""
+   }
+  },
+  {
+   "source": "lever",
+   "board": "freebalance.com",
+   "why": "North America + country CA",
+   "expected": [
+    "US-remote",
+    "us_remote"
+   ],
+   "job": {
+    "id": "4ec493db-73b2-4114-8310-4c84d7a90766",
+    "text": "R&D Global Director",
+    "categories": {
+     "commitment": "Full-time",
+     "department": "Research & Development",
+     "location": "Any Location North America",
+     "team": "*Global",
+     "allLocations": [
+      "Any Location North America"
+     ]
+    },
+    "country": "CA",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/freebalance.com/4ec493db-73b2-4114-8310-4c84d7a90766",
+    "descriptionPlain": "You will guide geographically distributed teams - including engineering managers, technical leads, and individual contributors - while balancing immediate delivery priorities with long-term engineering and platform modernization. Proven experience managing geographically distributed engineering teams and working effectively across multiple time zones and cultures. Ability to work effectively with geographically distributed teams and diverse stakeholders. Proven experience managing geographically distributed engineering teams and working effectively across multiple time zones and cultures. Abil"
+   }
+  },
+  {
+   "source": "lever",
+   "board": "includedhealth",
+   "why": "bare Remote + country US",
+   "expected": [
+    "US-remote",
+    "us_remote"
+   ],
+   "job": {
+    "id": "81faf685-d09e-4b8a-809c-9d93f9b1eb9c",
+    "text": "Accounts Receivable Staff Accountant",
+    "categories": {
+     "commitment": "Full-Time",
+     "department": "Finance",
+     "location": "Remote",
+     "team": "Accounting",
+     "allLocations": [
+      "Remote"
+     ]
+    },
+    "country": "US",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/includedhealth/81faf685-d09e-4b8a-809c-9d93f9b1eb9c",
+    "descriptionPlain": "Support recurring and usage-based billing, including true-ups, credits, adjustments, and billing schedule changes. Review and approve invoices and supporting data before release to confirm service periods, usage, pricing, credits, and required documentation are accurate. Review contract terms, pricing, billing cadence, usage measures, implementation fees, and other commercial provisions that affect invoicing, and translate them into billing instructions and system setup. Translate signed contract provisions into customer and contract setup, billing schedules, usage measures, implementation-fee"
+   }
+  },
+  {
+   "source": "lever",
+   "board": "sysdig",
+   "why": "secondary location Costa Rica",
+   "expected": [
+    "CR",
+    "cr_location"
+   ],
+   "job": {
+    "id": "af7fe5ab-9d5a-453c-8d6b-45772713246c",
+    "text": "Junior AI & Product Enablement Specialist",
+    "categories": {
+     "commitment": "Regular - Full Time",
+     "department": "Support",
+     "location": "Flexible, Spain",
+     "team": "SUPPORT ENGINEER",
+     "allLocations": [
+      "Flexible, Spain",
+      "Flexible - Costa Rica"
+     ]
+    },
+    "country": "ES",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/sysdig/af7fe5ab-9d5a-453c-8d6b-45772713246c",
+    "descriptionPlain": "When you join Sysdig, you can expect: Extra days off to prioritize your well-being Mental health support for you and your family through the Modern Health app Great compensation package We would love for you to join us! #LI-MC1 #LI-Remote"
+   }
+  },
+  {
+   "source": "lever",
+   "board": "penumbrainc",
+   "why": "no geography in text, country IN",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "e8e1990b-e37a-4423-9b78-ef4e442e8db3",
+    "text": "Territory Manager - India",
+    "categories": {
+     "commitment": "External",
+     "department": "Sales & Customer Support",
+     "location": "Major Metro cities",
+     "team": "International Sales",
+     "allLocations": [
+      "Major Metro cities"
+     ]
+    },
+    "country": "IN",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/penumbrainc/e8e1990b-e37a-4423-9b78-ef4e442e8db3",
+    "descriptionPlain": ""
+   }
+  },
+  {
+   "source": "lever",
+   "board": "penumbrainc",
+   "why": "CR on-site",
+   "expected": [
+    "CR",
+    "cr_location"
+   ],
+   "job": {
+    "id": "195fb576-9e74-4f6b-a76a-22a88245353c",
+    "text": "Industrial Engineer II",
+    "categories": {
+     "commitment": "External",
+     "department": "Engineering",
+     "location": "Cartago, Costa Rica",
+     "team": "Industrial Engineers",
+     "allLocations": [
+      "Cartago, Costa Rica"
+     ]
+    },
+    "country": "CR",
+    "workplaceType": "onsite",
+    "hostedUrl": "https://jobs.lever.co/penumbrainc/195fb576-9e74-4f6b-a76a-22a88245353c",
+    "descriptionPlain": ""
+   }
+  },
+  {
+   "source": "lever",
+   "board": "spotify",
+   "why": "US city, workplaceType decides",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "2a55d6c9-c564-443a-be3e-a3851db5a93b",
+    "text": "Account Executive - Commercial, Spotify Technology",
+    "categories": {
+     "commitment": "Permanent",
+     "department": "Operations and Business Support",
+     "location": "New York, NY",
+     "team": "Platform",
+     "allLocations": [
+      "New York, NY"
+     ]
+    },
+    "country": "US",
+    "workplaceType": "hybrid",
+    "hostedUrl": "https://jobs.lever.co/spotify/2a55d6c9-c564-443a-be3e-a3851db5a93b",
+    "descriptionPlain": "The United States base range for this position is $87,069-$124,385 plus equity."
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "headway",
+   "why": "bare Remote + addressCountry US",
+   "expected": [
+    "US-remote",
+    "us_remote"
+   ],
+   "job": {
+    "id": "1f473f3b-437d-4781-b0b4-83480f22c739",
+    "title": "Staff Product Manager, Enterprise Products",
+    "location": "Remote",
+    "secondaryLocations": [],
+    "address": {
+     "postalAddress": {
+      "addressCountry": "United States"
+     }
+    },
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/headway/1f473f3b-437d-4781-b0b4-83480f22c739",
+    "descriptionPlain": "1 in 4 people in the US have a treatable mental health condition, but most providers don't accept insurance, making therapy too expensive for most people. Over 90,000 providers across all 50 states run their practice on our software, serving over 2.6 million patients. We're a Series D company with $325M+ in funding (a16z, Accel, Spark Capital, etc.), looking for exceptional people to help us achieve this mission. Join us, and help change mental healthcare for the better. What You'll Own - Enterprise-tier products built in direct partnership with named strategic payer accounts — the kind of cap"
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "owner",
+   "why": "single non-CR LATAM country",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "e1cc058e-a08f-445b-89f1-afdb65dd6573",
+    "title": "Customer Support Representative (Colombia) - January Start Date",
+    "location": "Remote - Colombia",
+    "secondaryLocations": [],
+    "address": {
+     "postalAddress": {
+      "addressCountry": "Colombia"
+     }
+    },
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/owner/e1cc058e-a08f-445b-89f1-afdb65dd6573",
+    "descriptionPlain": "Where we work Owner is a remote-first, global company headquartered in San Francisco, with a sales hub in Toronto. Most of our teammates are distributed throughout the globe. The impact you will have - Consistently deliver a hospitality-driven, empathetic call and message tone that reflects Owner’s standards for care, professionalism, and respect, even in high-pressure or emotionally charged situations - Deliver timely, accurate, and empathetic support across a high volume of inbound phone calls, as well as some chats and emails from restaurant owners and their guests - Effectively manage mult"
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "owner",
+   "why": "multi-country LATAM (with secondaries)",
+   "expected": [
+    "LATAM-remote",
+    "latam_multi_country"
+   ],
+   "job": {
+    "id": "a631a8ac-1dae-4551-acd1-4de48681a27d",
+    "title": "POS Customer Success Manager, LATAM",
+    "location": "Remote - Colombia",
+    "secondaryLocations": [
+     {
+      "location": "Remote - Buenos Aires",
+      "address": {
+       "postalAddress": {
+        "addressCountry": "Argentina",
+        "addressLocality": "Buenos Aires"
+       }
+      }
+     },
+     {
+      "location": "Remote - Mexico",
+      "address": {
+       "postalAddress": {
+        "addressCountry": "Mexico"
+       }
+      }
+     }
+    ],
+    "address": {
+     "postalAddress": {
+      "addressCountry": "Colombia"
+     }
+    },
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/owner/a631a8ac-1dae-4551-acd1-4de48681a27d",
+    "descriptionPlain": "Where we work Owner is a remote-first, global company headquartered in San Francisco, with a sales hub in Toronto. Most of our teammates are distributed throughout the globe. - Deliver ongoing value by coaching customers on in-store growth strategies, loyalty program adoption, mobile app optimization and sales volume growth - Conduct Value Reviews that tie product usage to customer business outcomes: MoM sales growth, conversion, in-store revenue and digital channel performance. You will work in a collaborative enirvonment to define how this team operates at scale - Surface product insights an"
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "ramp",
+   "why": "isRemote=True but workplaceType Hybrid",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "4745807e-82f4-4b1a-857c-dc8dadc73076",
+    "title": "Credit Risk Associate",
+    "location": "New York, NY (HQ)",
+    "secondaryLocations": [],
+    "address": {
+     "postalAddress": {
+      "addressRegion": "NY",
+      "addressCountry": "USA",
+      "addressLocality": "New York City"
+     }
+    },
+    "isRemote": true,
+    "workplaceType": "Hybrid",
+    "jobUrl": "https://jobs.ashbyhq.com/ramp/4745807e-82f4-4b1a-857c-dc8dadc73076",
+    "descriptionPlain": "Every policy change affects how customers can grow their usage, and how responsibly Ramp scales up while managing risk. BENEFITS AVAILABLE TO ALL FULL-TIME RAMP EMPLOYEES (GLOBAL) - Flexible PTO - Centralized home-office equipment ordering - Health and wellness stipend - Budget for intra-office travel - Weekly coffee stipend UNITED STATES - 100% medical, dental & vision insurance coverage for you, with partial coverage for dependents - One Medical annual membership - 401(k), including employer match on contributions made while employed by Ramp - Fertility HRA (up to $10,000 per year) - Parenta"
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "plaid",
+   "why": "GBR + addressCountry UK; description mentions US",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "e3af6247-a442-4928-be7a-d48afae68d49",
+    "title": "Policy Manager",
+    "location": "GBR - LON Metro",
+    "secondaryLocations": [],
+    "address": {
+     "postalAddress": {
+      "postalCode": "EC2A 2DX",
+      "streetAddress": "Remote",
+      "addressCountry": "United Kingdom",
+      "addressLocality": "London"
+     }
+    },
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/plaid/e3af6247-a442-4928-be7a-d48afae68d49",
+    "descriptionPlain": "We’re dedicated to empowering this transformation by building the tools and experiences that thousands of developers use to create their own products. We work with thousands of companies like Venmo, SoFi, several of the Fortune 500, and many of the largest banks to make it easy for people to connect their financial accounts to the apps and services they want to use. Plaid’s network covers 12,000 financial institutions across the US, Canada, UK and Europe. As Plaid’s Public Policy Manager for the UK and EU, you’ll lead our policy work across both regions, partnering closely with our Head of Pol"
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "simspace-corporation",
+   "why": "remote CR",
+   "expected": [
+    "CR",
+    "cr_location"
+   ],
+   "job": {
+    "id": "19881e6f-44bb-4da7-8227-719fa999000b",
+    "title": "Software Engineer - Fullstack",
+    "location": "Remote - Costa Rica",
+    "secondaryLocations": [],
+    "address": {
+     "postalAddress": {
+      "addressRegion": "Costa Rica",
+      "addressCountry": "Costa Rica",
+      "addressLocality": "San Jose"
+     }
+    },
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/simspace-corporation/19881e6f-44bb-4da7-8227-719fa999000b",
+    "descriptionPlain": "Founded in 2015 by experts from U.S. Whether you’re remote or office-based, you’ll collaborate with talented colleagues across departments and time zones, united by the mission to create a safer digital world. Highly Desirable - Experience with Kubernetes-native services, distributed systems, orchestration, or control-plane style APIs. SimSpace is an Equal Opportunity Employer: In compliance with federal law, all persons hired will be required to verify identity and eligibility to work in the United States and to complete the required employment eligibility verification document form upon hire"
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "scale_army_careers",
+   "why": "bare Remote, LATAM in description",
+   "expected": [
+    "LATAM-remote",
+    "ambiguous_resolved_latam_text"
+   ],
+   "job": {
+    "id": "c1aa7444-f7dc-4394-95f3-2fb75d931bdb",
+    "title": "Senior AI Software Engineer, Agent Systems",
+    "location": "Remote",
+    "secondaryLocations": [],
+    "address": null,
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/scale%20army%20careers/c1aa7444-f7dc-4394-95f3-2fb75d931bdb",
+    "descriptionPlain": "This role is open to candidates based in LATAM, Africa, and Eastern Europe. Please note that as this role supports U.S.-based clients, candidates must be available to work during U.S. Nice to have - Running 10+ parallel agents and managing token and cost budgets at scale - Distributed systems, queues, and event-driven design - React for agent-facing interfaces - Prior work on developer tooling, orchestration frameworks, or internal agent platforms - Familiarity with where loop engineering is heading next, including continual learning systems - SOC 2 or ISO 27001 awareness for handling client d"
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "zapier",
+   "why": "region NAMER",
+   "expected": [
+    "US-remote",
+    "us_remote"
+   ],
+   "job": {
+    "id": "cb1aec2c-05cd-4598-8117-bd1f7ed9a49f",
+    "title": "Finance Manager, Marketing",
+    "location": "NAMER",
+    "secondaryLocations": [],
+    "address": {
+     "postalAddress": {
+      "addressRegion": "California",
+      "addressCountry": "United States",
+      "addressLocality": "San Francisco"
+     }
+    },
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/zapier/cb1aec2c-05cd-4598-8117-bd1f7ed9a49f",
+    "descriptionPlain": "- Our Commitment to Applicants https://zapier.com/jobs/our-commitment-to-applicants/ - Culture and Values at Zapier https://zapier.com/jobs/culture-and-values-at-zapier/ - Zapier Guide to Remote Work https://zapier.com/learn/remote-work/ - Zapier Code of Conduct https://zapier.com/jobs/zapier-code-of-conduct/ - Diversity and Inclusivity at Zapier https://zapier.com/jobs/working-on-diversity-and-inclusivity/ ABOUT YOU - This isn’t your first rodeo. brand) and drive ROI-by-channel reporting - Work on sales pipeline forecasting based on spend, as part of setting GTM targets and ARR modeling, flag"
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "zapier",
+   "why": "region South America",
+   "expected": [
+    "LATAM-remote",
+    "latam_region"
+   ],
+   "job": {
+    "id": "eaf4ef36-116b-4aa1-b874-7474b16851e6",
+    "title": "Sr. Technical Account Manager",
+    "location": "South America ",
+    "secondaryLocations": [
+     {
+      "location": "NAMER",
+      "address": {
+       "postalAddress": {
+        "addressRegion": "California",
+        "addressCountry": "United States",
+        "addressLocality": "San Francisco"
+       }
+      }
+     },
+     {
+      "location": "Latin America",
+      "address": {
+       "postalAddress": {}
+      }
+     }
+    ],
+    "address": {
+     "postalAddress": {}
+    },
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/zapier/eaf4ef36-116b-4aa1-b874-7474b16851e6",
+    "descriptionPlain": "Job posted: 8/28/2026 Location: Remote Canada, Central & South America- Pacific Time (PST) working hours required Hi there! - Our Commitment to Applicants https://zapier.com/jobs/our-commitment-to-applicants/ - Culture and Values at Zapier https://zapier.com/jobs/culture-and-values-at-zapier/ - Zapier Guide to Remote Work https://zapier.com/learn/remote-work/ - Zapier Code of Conduct https://zapier.com/jobs/zapier-code-of-conduct/ - Diversity and Inclusivity at Zapier https://zapier.com/jobs/working-on-diversity-and-inclusivity/ THINGS YOU’LL DO Design, build, and improve customer automations "
+   }
+  },
+  {
+   "source": "ashby",
+   "board": "zapier",
+   "why": "region APAC",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "6adee270-03bf-4b1b-915b-eba5fb56d1b6",
+    "title": "Sales Assist Representative",
+    "location": "APAC",
+    "secondaryLocations": [],
+    "address": {
+     "postalAddress": {}
+    },
+    "isRemote": true,
+    "workplaceType": "Remote",
+    "jobUrl": "https://jobs.ashbyhq.com/zapier/6adee270-03bf-4b1b-915b-eba5fb56d1b6",
+    "descriptionPlain": "If you want to advance your career at a fast-growing, profitable, impact-driven company, read on… - Our Commitment to Applicants https://zapier.com/jobs/our-commitment-to-applicants/ - Culture and Values at Zapier https://zapier.com/jobs/culture-and-values-at-zapier/ - Zapier Guide to Remote Work https://zapier.com/learn/remote-work/ - Zapier Code of Conduct https://zapier.com/jobs/zapier-code-of-conduct/ - Diversity and Inclusivity at Zapier https://zapier.com/jobs/working-on-diversity-and-inclusivity/ ABOUT YOU - You are located in India and able to work within the hours of ~9:00 pm - 7:00 a"
+   }
+  },
+  {
+   "source": "jooble",
+   "board": "data_analyst_p1",
+   "why": "Jooble, US on-site",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": 6284520031158939087,
+    "title": "Oncology Physicist",
+    "location": "Charleston, WV",
+    "link": "https://jooble.org/desc/6284520031158939087",
+    "snippet": ""
+   }
+  }
+ ]
+}

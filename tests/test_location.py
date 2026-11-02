@@ -143,9 +143,9 @@ REAL_TEXT_FALLBACK = [
      "This role is open to candidates based in LATAM, Africa, and Eastern Europe. Please note that as this "
      "role supports U.S.-based clients, candidates must be available to work during U.S. business hours.",
      {"workplace_type": "Remote", "is_remote": True}, LATAM_REMOTE, "ambiguous_resolved_latam_text"),
-    # GitLab, location "Remote": title names another country, no US/LATAM in the text
+    # GitLab, location "Remote": the title places it in another country
     ("Remote", "Strategic Account Executive, France",
-     "You will manage strategic accounts across the French market.", {}, OUT, AMBIGUOUS),
+     "You will manage strategic accounts across the French market.", {}, OUT, OUT_OF_SCOPE),
     # "join us" must not count as "US"
     ("Remote", "General Future Opportunities", "Interested in joining us? Tell us about yourself.",
      {"workplace_type": "Remote", "is_remote": True}, OUT, AMBIGUOUS),
@@ -199,3 +199,80 @@ def test_accepts_list_of_locations():
 def test_none_and_html_description():
     assert classify_location(None, "Data Analyst", "<p>Open to candidates in <b>Latin America</b></p>") == \
         (LATAM_REMOTE, "ambiguous_resolved_latam_text")
+
+
+# ---- whole raw postings (classify_posting) ----------------------------------------------
+# tests/fixtures/real_postings.json holds 38 real postings from today's raw files
+# (data/raw/ is git-ignored): location fields verbatim, descriptions trimmed to the
+# sentences that matter. Built and checked so each trimmed posting classifies exactly
+# like the full original.
+import json  # noqa: E402
+
+from location import classify_posting  # noqa: E402
+
+FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "real_postings.json").read_text(encoding="utf-8"))["postings"]
+
+
+@pytest.mark.parametrize("case", FIXTURES, ids=[f"{c['source']}:{c['board']}:{c['why']}" for c in FIXTURES])
+def test_real_postings(case):
+    assert classify_posting(case["source"], case["job"]) == tuple(case["expected"])
+
+
+def test_structured_country_beats_text():
+    # Lever: "Melbourne" would read as Australia; country US and the FL abbreviation agree
+    job = {"text": "Store Associate", "categories": {"location": "Melbourne, FL"}, "country": "US",
+           "workplaceType": "remote", "descriptionPlain": ""}
+    assert classify_posting("lever", job) == (US_REMOTE, "us_remote")
+    # Ashby: the text says nothing useful, addressCountry decides
+    job = {"title": "Analyst", "location": "GBR - LON Metro", "workplaceType": "Remote", "isRemote": True,
+           "address": {"postalAddress": {"addressCountry": "United Kingdom"}},
+           "descriptionPlain": "Our customers are in the U.S. and Europe."}
+    assert classify_posting("ashby", job) == (OUT, OUT_OF_SCOPE)
+
+
+def test_text_region_survives_structured_country():
+    # One country field can't hold a region: "South America" + BR stays LATAM-remote
+    job = {"text": "Engineer", "categories": {"location": "South America"}, "country": "BR",
+           "workplaceType": "remote", "descriptionPlain": ""}
+    assert classify_posting("lever", job) == (LATAM_REMOTE, "latam_region")
+
+
+def test_lever_country_applies_to_primary_location_only():
+    # Sysdig: country ES belongs to "Flexible, Spain"; the secondary Costa Rica location still counts
+    job = {"text": "SRE", "categories": {"location": "Flexible, Spain",
+                                         "allLocations": ["Flexible, Spain", "Flexible - Costa Rica"]},
+           "country": "ES", "workplaceType": "remote", "descriptionPlain": ""}
+    assert classify_posting("lever", job) == (CR, "cr_location")
+
+
+def test_greenhouse_location_beats_office():
+    # Reddit: remote US role attached to the San Francisco HQ office
+    job = {"title": "Engineer", "location": {"name": "Remote - United States"},
+           "offices": [{"name": "San Francisco", "location": "San Francisco, CA, United States"}], "content": ""}
+    assert classify_posting("greenhouse", job) == (US_REMOTE, "us_remote")
+
+
+def test_ambiguous_order_title_then_office_then_description():
+    office_de = [{"name": "Remote Germany", "location": None}]
+    us_boilerplate = "Applicants must be authorized to work in the United States."
+    # title first
+    job = {"title": "Account Executive (France)", "location": {"name": "Remote"}, "offices": office_de,
+           "content": us_boilerplate}
+    assert classify_posting("greenhouse", job) == (OUT, OUT_OF_SCOPE)
+    # then office (beats the description's boilerplate)
+    job = {"title": "Security Engineer", "location": {"name": "Remote"}, "offices": office_de, "content": us_boilerplate}
+    assert classify_posting("greenhouse", job) == (OUT, OUT_OF_SCOPE)
+    # then description, when the office has no geography
+    job = {"title": "Security Engineer", "location": {"name": "Remote"}, "offices": [{"name": "Remote"}],
+           "content": us_boilerplate}
+    assert classify_posting("greenhouse", job) == (US_REMOTE, "ambiguous_resolved_us_text")
+    # "Global" in a title is not a geography
+    job = {"title": "Global Payroll Analyst", "location": {"name": "Remote"}, "offices": [], "content": ""}
+    assert classify_posting("greenhouse", job) == (OUT, AMBIGUOUS)
+
+
+def test_lever_html_description_fallback():
+    # CSC "Seasonal Custom Boot Fitter": descriptionPlain empty, HTML description full
+    job = {"text": "Analyst", "categories": {"location": "Remote"}, "workplaceType": "remote",
+           "descriptionPlain": "", "description": "<p>Open to candidates across <b>Latin America</b>.</p>"}
+    assert classify_posting("lever", job) == (LATAM_REMOTE, "ambiguous_resolved_latam_text")

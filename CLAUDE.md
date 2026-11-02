@@ -101,10 +101,17 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       `market` is the company's market; big US boards also carry on-site/overseas jobs.
 - [x] `sql/03_market_and_exclusions.sql` applied to `dev` (not `main`): `jobs.market` replaces
       `country`, ATS sources allowed, `etl_runs` exclusion columns, views grouped by market.
-- [x] `etl/location.py`: `classify_location(location, title, description, workplace_type=,
-      is_remote=, country_code=) -> (market, reason)`, EN/ES. `tests/test_location.py` (94 cases,
-      real strings from Jooble raw + 16 ATS boards); run `python -m pytest tests/`
-      (dev deps: `requirements-dev.txt`). Rules beyond the spec: remote restricted to ONE non-CR
+- [x] `etl/location.py`: `classify_posting(source, job, description=None) -> (market, reason)` for
+      raw postings (use this in transform; pass the cleaned description), built on
+      `classify_location(...)` for plain fields. EN/ES. Structured fields preferred: Lever
+      `workplaceType` + `country` (primary location only), Ashby `workplaceType` (over `isRemote`) +
+      `addressCountry` per location; regions in the text are still added, explicit "Costa Rica"
+      always counts. Greenhouse `offices` is often an HQ, so it's used only for bare "Remote"
+      after the title and before the description. `tests/test_location.py` (138 cases: real
+      strings + 38 real postings in `tests/fixtures/real_postings.json`); run
+      `python -m pytest tests/` (dev deps: `requirements-dev.txt`). Known limit: free-text
+      restrictions inside descriptions ("must be based in Europe") aren't parsed.
+      Rules beyond the spec: remote restricted to ONE non-CR
       LATAM country is out of scope; 2+ LATAM countries or "Anywhere"/"Worldwide" → LATAM-remote;
       country-level "United States" with no remote flag → US-remote only if the description says
       remote/distributed; "Remote" + 2+ US state names in the text → US-remote.
