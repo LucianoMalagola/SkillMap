@@ -12,42 +12,63 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "etl"))
 from normalize import clean_html, detect_modality, normalize  # noqa: E402
-from roles import BI_ANALYST, BIZOPS_ANALYST, DATA_ANALYST, DATA_REPORTING, classify_title  # noqa: E402
+from roles import (ANALYTICS_INSIGHTS, BI_ANALYST, BIZOPS_ANALYST, BUSINESS_ANALYST, DATA_ANALYST,  # noqa: E402
+                   DATA_REPORTING, MARKETING_ANALYST, classify_title)
 from skills import SkillExtractor  # noqa: E402
 
 # ---- roles ---------------------------------------------------------------------------------
 
 ROLE_CASES = [
     # in
-    ("Marketing Science Analyst", DATA_ANALYST),                       # Critical Mass
-    ("Marketing Science, Senior Analyst", DATA_ANALYST),
-    ("Marketing Science, Analyst - Media", DATA_ANALYST),
+    ("Marketing Science Analyst", MARKETING_ANALYST),                  # Critical Mass
+    ("Marketing Science, Senior Analyst", MARKETING_ANALYST),
+    ("Marketing Science, Analyst - Media", MARKETING_ANALYST),
     ("Senior Analyst Data Strategy & Analytics", DATA_ANALYST),        # Kepler
     ("Senior Analyst, Data Analytics, SIU", DATA_ANALYST),             # Oscar
-    ("Senior Business Analyst, Revenue Analytics", DATA_ANALYST),      # Reddit
+    ("Senior Business Analyst, Revenue Analytics", BUSINESS_ANALYST),  # Reddit
     ("Senior Financial Insights Analyst", DATA_ANALYST),               # Instacart
     ("Contract Senior Data Analyst (SQL,Telemetry,Browser Engine)", DATA_ANALYST),  # Mozilla
     ("Data Analyst II, Business Insights", DATA_ANALYST),              # Garner
+    ("Partner Operations Data Analyst (Remote Eligible - Costa Rica)", DATA_ANALYST),  # Smartsheet
     ("Revenue Operations Analyst", BIZOPS_ANALYST),                    # Tebra
     ("Sales Operations Analyst - Public Sector", BIZOPS_ANALYST),      # Elastic
-    ("Senior Marketing Operations Analyst", BIZOPS_ANALYST),
+    ("Commercial Operations Analyst", BIZOPS_ANALYST),                 # synthetic
+    ("Senior Marketing Operations Analyst", MARKETING_ANALYST),        # Newsela: BizOps is narrow now
+    ("Senior Analyst, Digital Media (Paid Social)", MARKETING_ANALYST),  # Kepler
+    ("Fashion Paid Media Senior Performance Analyst", MARKETING_ANALYST),  # Power Digital
+    ("Digital Business Analyst", BUSINESS_ANALYST),                    # Konrad
+    ("Senior Associate, Product Analytics & Applied AI", ANALYTICS_INSIGHTS),  # Owner.com
+    ("Principal, Marketing Analytics", ANALYTICS_INSIGHTS),            # Elastic (individual contributor)
+    ("Senior Consultant, Analytics Consulting", ANALYTICS_INSIGHTS),   # Komodo Health
+    ("Staff Advanced Analytics, Community Blueprint & Quality", ANALYTICS_INSIGHTS),  # Airbnb
     ("Senior Data Analyst, Reporting", DATA_REPORTING),                # Garner: Reporting > Data Analyst
+    ("Reporting Analyst, Consumer Services", DATA_REPORTING),          # Power Digital
     ("Business Intelligence Analyst", BI_ANALYST),                     # Snowflake (discovery)
     ("BI Developer", BI_ANALYST),                                      # synthetic
     ("Reporting Analyst", DATA_REPORTING),                             # synthetic
     ("Analista de Datos", DATA_ANALYST),                               # synthetic, Spanish
     ("Analista de Inteligencia de Negocios", BI_ANALYST),              # synthetic, Spanish
     ("Analista de Reportes", DATA_REPORTING),                          # synthetic, Spanish
+    ("Analista de Marketing", MARKETING_ANALYST),                      # synthetic, Spanish
+    ("Analista de Negocios", BUSINESS_ANALYST),                        # synthetic, Spanish
     # out
     ("Analytics Engineer", None),
     ("Staff Data Scientist, Ads", None),
     ("Senior Data Engineer", None),
     ("Insights Manager II, Retail Insights", None),
+    ("Insights Lead, Instacart Business", None),
+    ("Lead, GTM Analytics & Applied AI", None),                        # lead: not an individual contributor
+    ("Manager, Analytics & Strategy", None),
+    ("Principal, Strategic Finance & Analytics, Acquisition", None),   # finance
+    ("Data Scientist, Enterprise Analytics", None),
     ("Manager, SEC Reporting", None),
-    ("Digital Business Analyst", None),
     ("Senior Financial Analyst, FP&A", None),
     ("Payment Operations Analyst", None),
-    ("Senior Analyst, Digital Media (Paid Social)", None),
+    ("GTM Operations Analyst", None),                                  # synthetic: BizOps is narrow now
+    ("Sr. Business Systems Analyst", None),                            # systems analyst
+    ("Performance Management Analyst", None),                          # synthetic: HR, not marketing
+    ("Associate Audience Analyst", None),                              # Power Digital
+    ("Senior Analyst, Digital Media", MARKETING_ANALYST),
     ("Electronic Data Interchange (EDI) Analyst", None),
     ("Senior Analyst, Credentialing Quality & Data Operations", None),
     ("Quantitative Analyst II (Capital Structuring & Analytics)", None),
