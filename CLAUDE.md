@@ -60,11 +60,20 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 ## Status
 - [x] Repo, README, schema, seed dictionary, Neon project + branches
 - [x] `etl/extract_jooble.py` (saves raw JSON to `data/raw/jooble/<date>/`)
-- [ ] **Next:** build the company list. Research companies with data roles in Costa Rica and
-      US-remote that use Greenhouse / Lever / Ashby; write `etl/discover_boards.py` to verify each
-      board token responds and has open postings; save confirmed list to `etl/companies.csv`
-      (columns: company, ats, board_token, market).
-- [ ] ATS extractors (Greenhouse, Lever, Ashby) + Remotive extractor
+- [x] Company list: `etl/company_candidates.csv` (68 researched, incl. not-found) →
+      `etl/discover_boards.py` → `etl/companies.csv` (48 confirmed: 20 CR, 28 US-remote, 8 healthcare).
+      Findings: big CR shared-services centres (Intel, P&G, Boston Scientific, Experian…) use
+      Workday/SuccessFactors, so they're unreachable via these APIs; the CR list is tech/nearshore.
+      Only ~60 titles across all boards look like target roles: value is full descriptions, not volume.
+      `market` is the company's market; big US boards also carry on-site/overseas jobs.
+- [ ] **Next:** ATS extractors (Greenhouse, Lever, Ashby) + Remotive extractor. First add
+      `sql/03_...sql` extending the `jobs.source` CHECK. Format notes (samples in `data/raw/samples/`):
+      - Greenhouse: list with `?content=true`; `content` is double-escaped HTML (`html.unescape` first).
+      - Lever: requirements often live in `lists[]` ("Who You Are"), not `descriptionPlain`;
+        concatenate description + lists + additional. Gives `workplaceType` and `country`.
+      - Ashby: `descriptionPlain`, `isRemote`, `workplaceType`, `secondaryLocations`;
+        `?includeCompensation=true` for salary.
+      - Bluelight posts one copy per location (612 postings, 9 titles): dedupe by title + description.
 - [ ] `etl/transform_load.py`: HTML cleanup, title/role filter, tool extraction via `skill_synonyms`
       (regex with word boundaries; beware false positives like "R" and "Epic"), bilingual modality
       classification (remote/remoto/teletrabajo, hybrid/híbrido, on-site/presencial), upsert with
