@@ -59,28 +59,30 @@ def main() -> int:
     args = parser.parse_args()
 
     env_path = Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.exists():
-        print(f"ERROR: no .env file found at {env_path}")
-        print("Create it from .env.example (on Windows, check it isn't saved as .env.txt).")
-        return 1
-    load_dotenv(env_path)
+    if env_path.exists():          # locally; in GitHub Actions the key comes from the environment
+        load_dotenv(env_path)
     api_key = os.getenv("JOOBLE_API_KEY", "").strip()
     if not api_key:
-        print(f"ERROR: JOOBLE_API_KEY is empty in {env_path}")
-        print("Add a line like: JOOBLE_API_KEY=your-key  (no quotes, no spaces around '=').")
+        print("ERROR: JOOBLE_API_KEY is not set (environment or .env).")
+        print("In .env add a line like: JOOBLE_API_KEY=your-key  (no quotes, no spaces around '=').")
         return 1
 
     out_dir = RAW_DIR / date.today().isoformat()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    total_jobs = 0
+    total_jobs, ok_requests = 0, 0
     for role in args.roles:
         for page in range(1, args.pages + 1):
             try:
                 data = fetch_page(args.host, api_key, role, args.location, page)
             except requests.HTTPError as err:
-                print(f"[{role} p{page}] HTTP error: {err}")
+                # never print err itself: its message contains the request URL, i.e. the key
+                print(f"[{role} p{page}] HTTP error {err.response.status_code if err.response is not None else '?'}")
                 continue
+            except requests.RequestException as err:
+                print(f"[{role} p{page}] network error: {type(err).__name__}")
+                continue
+            ok_requests += 1
 
             jobs = data.get("jobs", [])
             total_jobs += len(jobs)
@@ -93,8 +95,8 @@ def main() -> int:
                 break          # no more results for this role
             time.sleep(1)      # be polite to the API
 
-    print(f"Done: {total_jobs} postings saved to {out_dir}")
-    return 0
+    print(f"Done: {ok_requests} requests ok, {total_jobs} postings saved to {out_dir}")
+    return 0 if ok_requests else 1
 
 
 if __name__ == "__main__":

@@ -88,6 +88,54 @@ dashboards/   Power BI file and screenshots
 data/raw/     raw API responses (not committed)
 ```
 
+## How to run and test
+
+Windows PowerShell, from the repository root. One-time setup:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+Copy-Item .env.example .env      # then fill in the values (dev connection string, API keys)
+```
+
+`etl.run_pipeline` is the single entry point, used both locally and by GitHub Actions.
+`--target dev` reads `DATABASE_URL_DEV` (or `DATABASE_URL`) from `.env`; `--target main` needs
+`DATABASE_URL_MAIN`, which only the workflow has: production is written by the workflow.
+
+```powershell
+# Tests (no database or network needed)
+python -m pytest tests/
+
+# Lint
+python -m ruff check etl tests
+
+# Full pipeline on dev: extract every source, load, run the data-quality checks
+python -m etl.run_pipeline --target dev --skip-jooble
+
+# Dry run: extract nothing, transform today's raw files, report, write nothing
+python -m etl.run_pipeline --target dev --skip-extract --skip-jooble --dry-run
+
+# Reprocess raw files without calling any API (today's, or a past day)
+python -m etl.run_pipeline --target dev --skip-extract --skip-jooble
+python -m etl.run_pipeline --target dev --date 2026-11-01 --skip-jooble
+
+# A single source
+python -m etl.run_pipeline --target dev --sources lever
+
+# Schema: apply pending migrations to dev (main gets them through the workflow)
+python -m etl.migrate --target dev --dry-run
+python -m etl.migrate --target dev
+
+# Data-quality checks on their own, and regenerate docs/DATA_DICTIONARY.md
+python -m etl.quality_checks --target dev
+python -m etl.gen_data_dictionary --target dev
+```
+
+`--skip-jooble` stays until Jooble enables Costa Rica results for our key. Remotive allows
+about 4 requests a day and each full run makes 2, so for repeated local runs prefer
+`--skip-extract`.
+
 ## Tech stack
 
 Python · PostgreSQL (Neon) · SQL · pytest · GitHub Actions · Google Data Studio · Power BI · DAX

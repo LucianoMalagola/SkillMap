@@ -39,3 +39,21 @@ def redact(text: str, names: tuple[str, ...] = SECRET_ENV_VARS) -> tuple[str, in
 
 def contains_secret(text: str, names: tuple[str, ...] = SECRET_ENV_VARS) -> bool:
     return any(value in text for _, value in _secrets(names))
+
+
+def scrub_tree(root, names: tuple[str, ...] = SECRET_ENV_VARS) -> tuple[int, int]:
+    """Last line of defence before raw files leave the machine (GitHub artifact): redact any
+    credential value found in any file under root, in place. Returns (files_scanned,
+    files_fixed). Values are never printed."""
+    from pathlib import Path
+    scanned = fixed = 0
+    for path in Path(root).rglob("*"):
+        if not path.is_file():
+            continue
+        scanned += 1
+        text = path.read_bytes().decode("utf-8", errors="surrogateescape")
+        clean, n = redact(text, names)
+        if n:
+            path.write_bytes(clean.encode("utf-8", errors="surrogateescape"))
+            fixed += 1
+    return scanned, fixed
