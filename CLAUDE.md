@@ -195,6 +195,11 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       removing legal/HR boilerplate, calibrated on 5,400 postings: placeholders had 3 and 24, shortest
       real posting 316; full-text sources only) → `duplicate` (same company+title+description;
       smallest `external_id` kept). Upsert on (source, external_id); `job_skills` replaced each run.
+      Identical copies (company+title+description) are merged BEFORE the location step and count as
+      one posting (`location.classify_group` pools their locations). Rows still in today's raw data
+      but excluded by current rules are **removed** (they'd otherwise linger in the 90-day views).
+      Role categories (2026-11-02): Data Analyst, BI Analyst, Data Reporting, Business Operations Analyst
+      (narrow), Marketing Analyst, Business Analyst, Analytics & Insights; see `roles.py` docstring.
       Deactivation: boards fetched OK → their jobs not loaded today; any source → not seen for 14 days
       (Jooble isn't a full inventory). One `etl_runs` row per source, own transaction per source.
       `--dry-run` writes nothing. Decisions:

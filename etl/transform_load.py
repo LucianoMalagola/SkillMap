@@ -17,12 +17,16 @@ For each source (greenhouse, lever, ashby, jooble, adzuna, remotive):
                           count as one posting.
   4. Detect modality, extract tools (etl/skills.py, synonyms from the DB).
   5. Upsert into jobs (ON CONFLICT (source, external_id)), replace job_skills.
-  6. Deactivate stale jobs:
+  6. Remove rows that today's rules exclude: a posting still present in today's raw data
+     but not loaded (placeholder, now out of scope, merged into another copy) shouldn't be
+     in the table at all ("out-of-scope postings are never loaded"). Without this, an old
+     row would linger in the 90-day views under its old classification.
+  7. Deactivate stale jobs (closed postings stay in the table, inactive):
        - boards fetched OK today (and Remotive, when every category was fetched): their
          active jobs not loaded today
        - any source: jobs not seen for STALE_DAYS (covers Jooble, whose search results
          aren't a full inventory, and boards removed from companies.csv)
-  7. Log one etl_runs row per source with exclusion counts by reason.
+  8. Log one etl_runs row per source with exclusion counts by reason.
 
 Each source loads in its own transaction: a failure rolls back that source only and
 marks its etl_runs row 'failed'.
@@ -208,10 +212,16 @@ RETURNING job_id, (xmax = 0) AS inserted
 
 
 def load(conn: psycopg.Connection, source: str, rows: list[dict], ok_companies: list[str] | None,
-         skill_ids: dict[str, int], full_inventory: bool = False) -> dict:
+         skill_ids: dict[str, int], full_inventory: bool = False, seen_ids: list[str] | None = None) -> dict:
+    """seen_ids: every external_id present in today's raw data for this source."""
     stats = Counter()
+    loaded_ids = [r["external_id"] for r in rows]
     with conn.transaction():
         with conn.cursor() as cur:
+            if seen_ids:   # in today's raw data but excluded by today's rules -> remove (job_skills cascade)
+                cur.execute("""DELETE FROM jobs WHERE source = %s AND external_id = ANY(%s)
+                               AND NOT (external_id = ANY(%s))""", (source, seen_ids, loaded_ids))
+                stats["removed"] += cur.rowcount
             for row in rows:
                 job_id, inserted = cur.execute(UPSERT_SQL, row).fetchone()
                 stats["new" if inserted else "updated"] += 1
@@ -278,6 +288,7 @@ def main() -> int:
                 continue
             items, ok_companies, failed_boards, full_inventory = read_raw(source, day_dir)
             rows, excluded = transform(source, items, extractor)
+            seen_ids = list({normalize(source, job, company)["external_id"] for company, job in items})
             boards = f", {len(ok_companies)} boards ok / {failed_boards} failed" if ok_companies is not None else ""
             print(f"[{source}] {day_dir.name}: {len(items)} postings{boards} -> {len(rows)} to load; "
                   f"excluded {sum(excluded.values())} {dict(excluded.most_common())}")
@@ -286,9 +297,10 @@ def main() -> int:
 
             run_id = start_run(conn, source)
             try:
-                stats = load(conn, source, rows, ok_companies, skill_ids, full_inventory)
+                stats = load(conn, source, rows, ok_companies, skill_ids, full_inventory, seen_ids)
                 finish_run(conn, run_id, "success", len(items), stats["new"], excluded)
                 print(f"[{source}] loaded: {stats['new']} new, {stats['updated']} updated, "
+                      f"{stats['removed']} removed (excluded by current rules), "
                       f"{stats['deactivated']} deactivated (etl_runs.run_id={run_id})")
             except Exception as err:   # record the failure, keep going with the other sources
                 failures += 1
