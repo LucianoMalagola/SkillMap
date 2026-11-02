@@ -1,7 +1,7 @@
 """
 SkillMap: transform the latest raw files and load in-scope postings into PostgreSQL.
 
-For each source (greenhouse, lever, ashby, jooble):
+For each source (greenhouse, lever, ashby, jooble, adzuna):
   1. Read the latest data/raw/<source>/<date>/ (ATS: only boards marked "ok" in _manifest.json).
   2. Normalize each posting (etl/normalize.py): HTML cleanup, Lever plain-text fallback.
   3. Exclude, counting each posting under the FIRST reason it fails:
@@ -52,7 +52,7 @@ from skills import SkillExtractor  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"
-SOURCES = ("greenhouse", "lever", "ashby", "jooble")
+SOURCES = ("greenhouse", "lever", "ashby", "jooble", "adzuna")
 STALE_DAYS = 14
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -86,13 +86,17 @@ def read_raw(source: str, day_dir: Path) -> tuple[list[tuple[str, dict]], list[s
             ok_companies.append(board["company"])
         return items, ok_companies, failed
 
-    # Jooble: one file per search; the same posting can come back in several searches.
+    # Search APIs (Jooble, Adzuna): one file per query; the same posting can come back in
+    # several queries. Results aren't a full inventory, so no per-board deactivation.
+    list_key = {"jooble": "jobs", "adzuna": "results"}[source]
     items, seen = [], set()
     for path in sorted(day_dir.glob("*.json")):
-        for job in json.loads(path.read_text(encoding="utf-8")).get("jobs", []):
+        if path.name.startswith("_"):
+            continue
+        for job in json.loads(path.read_text(encoding="utf-8")).get(list_key, []):
             if str(job.get("id")) not in seen:
                 seen.add(str(job.get("id")))
-                items.append((job.get("company") or "", job))
+                items.append(("", job))
     return items, None, 0
 
 

@@ -1017,6 +1017,76 @@
     "link": "https://jooble.org/desc/6284520031158939087",
     "snippet": ""
    }
+  },
+  {
+   "source": "adzuna",
+   "board": "data_analyst_p1",
+   "why": "remote in title",
+   "expected": [
+    "US-remote",
+    "us_remote"
+   ],
+   "job": {
+    "id": "5950088391",
+    "title": "Junior Software Engineer (Remote)/Data Analyst - Junior Level (Remote)",
+    "location": {
+     "display_name": "Chelsea and Clinton, Manhattan",
+     "area": [
+      "US",
+      "New York",
+      "New York City",
+      "Manhattan",
+      "Chelsea and Clinton"
+     ]
+    },
+    "description": "Quiet Years Do Not Have to Mean a Quiet Career A Break Is Recoverable. An Old Stack Is Not, Unless You Update It. Career gaps follow long layoffs, visa stalls, burnout, family needs, or a move. Java, React, cloud, and interview bars moved anyway. You apply to software engineer jobs with yesterday's tools and collect automated rejections. Staffing firms offer short contracts that recreate the gap later. Close the Hole With Work From This Year JOPP covers Data Science, Data analytics Core Java, S…",
+    "salary_is_predicted": "1"
+   }
+  },
+  {
+   "source": "adzuna",
+   "board": "data_analyst_p1",
+   "why": "remote in snippet, city location + country US",
+   "expected": [
+    "US-remote",
+    "us_remote"
+   ],
+   "job": {
+    "id": "5949270879",
+    "title": "Data Analyst IV SQL, Power BI",
+    "location": {
+     "display_name": "US",
+     "area": [
+      "US"
+     ]
+    },
+    "description": "Position Purpose: Responsible for analytic data needs of the business unit. Handle complex data projects and acts as a lead for other Data Analysts. Key Details: Must be authorized to work in the U.S. without the need for employment-based visa sponsorship now or in the future. Sponsorship and future sponsorship are not available for this opportunity, including employment-based visa types H-1B, L-1, O-1, H-1B1, F-1, J-1, OPT, or CPT. Remote Available. Provide advanced analytical support for busi…",
+    "salary_is_predicted": "0"
+   }
+  },
+  {
+   "source": "adzuna",
+   "board": "data_analyst_p1",
+   "why": "no remote signal in the 500-char snippet",
+   "expected": [
+    null,
+    "out_of_scope"
+   ],
+   "job": {
+    "id": "5949186780",
+    "title": "Public Health Data Analyst",
+    "location": {
+     "area": [
+      "US",
+      "Virginia",
+      "Fairfax County",
+      "Fairfax"
+     ],
+     "display_name": "Fairfax, Fairfax County"
+    },
+    "description": "Description We are seeking a Public Health Data Analyst to support data analysis, data quality, visualization, and epidemiologic activities for public health surveillance programs. This position combines hands-on quantitative analysis with an understanding of epidemiology, surveillance systems, and public health data. The ideal candidate will bring a strong foundation in either public health surveillance, including syndromic surveillance and ESSENCE, or analytical programming and data analysis …",
+    "salary_is_predicted": "1"
+   }
   }
  ]
 }

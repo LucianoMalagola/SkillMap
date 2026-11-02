@@ -60,7 +60,16 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   "data analyst" returned civil engineers), so the transform step needs a **title filter**.
   Jooble response fields: title, location, snippet (HTML entities/<b> tags), salary (free text),
   source, type, link, company, updated, id.
-- **Adzuna:** account in "Pending Activation". Free tier ~1,000 calls/month. No Costa Rica coverage.
+- **Adzuna:** active (keys in `.env`). `etl/extract_adzuna.py`: US only (no Costa Rica coverage), role in
+  the title (`title_only`) + `what=remote` (no remote filter exists), `max_days_old=7`, 50/page.
+  Default 4 roles × 1 page = 4 calls/run (~120/month; free tier ~1,000; `--max-calls` caps a run).
+  "data analyst" has ~680 matches/7 days: `--pages 2` would catch nearly all (~240 calls/month).
+  Snippets are cut at 500 chars → `description_is_full = FALSE`. Most salaries are Adzuna estimates
+  (`salary_is_predicted = "1"`): only real ones are stored. **Adzuna puts the API app_id in every
+  `redirect_url` (`utm_source`)**: raw files keep it (byte-for-byte rule), the transform strips
+  `utm_*` before storing the URL. Many ads are copied per city (Eliassen: 31 copies) → `duplicate`.
+  Terms: personal/academic research; credit "The Adzuna API" with a link to adzuna.com.
+  First run (2026-11-01): 4 calls, 130 postings → 24 loaded.
 - **USAJOBS:** decided not to use for now.
 
 ### Location scope and filtering
@@ -124,6 +133,8 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       First run (2026-11-01): 48/48 boards, 5,400 postings, 83.5 MB, ~80 s. Verified: counts match
       Greenhouse `meta.total`, Lever returns everything without pagination, median description
       3.7k–6.4k chars.
+- [x] `etl/extract_adzuna.py` + Adzuna in transform (see Data sources). Snippet sources (Jooble,
+      Adzuna) get remote/not from title, location, snippet (`location._snippet_workplace`).
 - [ ] Remotive extractor (remote postings, full descriptions).
 - [x] `etl/transform_load.py` (+ `etl/normalize.py`, `etl/roles.py`, `etl/skills.py`; tests in
       `tests/test_transform.py`). Latest raw day per source; ATS via `_manifest.json` (only `ok` boards).

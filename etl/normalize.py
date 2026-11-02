@@ -15,6 +15,7 @@ import html
 import re
 import unicodedata
 from datetime import datetime, timezone
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 ATS_SOURCES = ("greenhouse", "lever", "ashby")
 SNIPPET_SOURCES = ("jooble", "adzuna")
@@ -119,7 +120,24 @@ def _number(text: str) -> float | None:
         return None
 
 
+def _strip_tracking(url: str | None) -> str | None:
+    """Adzuna puts the API app_id in every redirect_url (utm_source=...). Drop the utm_*
+    parameters before storing the link: the link still works and no credential reaches
+    the database or the public dashboard."""
+    if not url:
+        return url
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if not k.startswith("utm_")]
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
 def _salary(source: str, job: dict) -> tuple[float | None, float | None, str | None]:
+    if source == "adzuna":
+        # Most Adzuna salaries are Adzuna's own estimates (salary_is_predicted = "1"): skip those.
+        if str(job.get("salary_is_predicted")) == "0" and job.get("salary_min"):
+            area = ((job.get("location") or {}).get("area") or [""])[0]
+            return job["salary_min"], job.get("salary_max") or job["salary_min"], "USD" if area == "US" else None
+        return None, None, None
     if source == "lever":
         sr = job.get("salaryRange") or {}
         factor = _LEVER_INTERVALS.get(sr.get("interval"))
@@ -187,6 +205,12 @@ def normalize(source: str, job: dict, company: str) -> dict:
                       description=clean_html(job.get("snippet")), url=job.get("link"),
                       posted_at=_parse_datetime(job.get("updated")), workplace_type=None)
         company = job.get("company") or company
+    elif source == "adzuna":
+        fields = dict(external_id=str(job["id"]), title=job.get("title"),
+                      location_raw=(job.get("location") or {}).get("display_name"),
+                      description=clean_html(job.get("description")), url=_strip_tracking(job.get("redirect_url")),
+                      posted_at=_parse_datetime(job.get("created")), workplace_type=None)
+        company = (job.get("company") or {}).get("display_name") or company
     else:
         raise ValueError(f"unknown source: {source}")
 

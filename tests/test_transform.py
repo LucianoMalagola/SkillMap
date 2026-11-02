@@ -158,3 +158,15 @@ def test_salary_annualised():
                      "&lt;span&gt;$58,000&lt;/span&gt;&lt;span&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$68,000 USD&lt;/span&gt;&lt;/div&gt;"}
     n = normalize("greenhouse", gh, "c")
     assert (n["salary_min"], n["salary_max"], n["salary_currency"]) == (58000, 68000, "USD")
+
+
+def test_adzuna_url_tracking_removed_and_predicted_salary_skipped():
+    job = {"id": "1", "title": "Data Analyst", "location": {"display_name": "US", "area": ["US"]},
+           "description": "Remote role", "company": {"display_name": "Acme"},
+           "redirect_url": "https://www.adzuna.com/land/ad/1?se=abc&utm_medium=api&utm_source=APPID&v=XYZ",
+           "salary_min": 90000, "salary_max": 90000, "salary_is_predicted": "1", "created": "2026-11-01T21:32:54Z"}
+    n = normalize("adzuna", job, "")
+    assert "utm_" not in n["url"] and "APPID" not in n["url"] and "se=abc" in n["url"]
+    assert n["salary_min"] is None and n["company"] == "Acme" and n["description_is_full"] is False
+    n = normalize("adzuna", {**job, "salary_is_predicted": "0"}, "")
+    assert (n["salary_min"], n["salary_currency"]) == (90000, "USD")

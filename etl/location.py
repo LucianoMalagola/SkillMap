@@ -416,7 +416,24 @@ def posting_text(source: str, job: dict) -> str:
         return job.get("descriptionPlain") or _strip_html(job.get("descriptionHtml"))
     if source == "jooble":
         return _strip_html(job.get("snippet"))
+    if source == "adzuna":
+        return _strip_html(job.get("description"))
     raise ValueError(f"unknown source: {source}")
+
+
+_SNIPPET_HYBRID_ONSITE = re.compile(r"(?:hybrid|hibrido|hibrida|on[- ]?site|in[- ]office|in[- ]person|presencial)")
+
+
+def _snippet_workplace(title: str, location: str, text: str) -> str | None:
+    """Snippet sources (Jooble, Adzuna) have no structured workplace field. Remote if the
+    title or location says so, or if the snippet says remote and nothing about hybrid or
+    on-site work."""
+    if REMOTE_RE.search(_norm(f"{title} {location}")):
+        return "remote"
+    t = _norm(text)
+    if TEXT_REMOTE_RE.search(t) and not _SNIPPET_HYBRID_ONSITE.search(t):
+        return "remote"
+    return None
 
 
 def _ashby_country(entry: dict) -> str | None:
@@ -426,7 +443,7 @@ def _ashby_country(entry: dict) -> str | None:
 def classify_posting(source: str, job: dict, description: str | None = None) -> tuple[str | None, str]:
     """Classify one raw posting, exactly as the API returned it.
 
-    source       'greenhouse' | 'lever' | 'ashby' | 'jooble'
+    source       'greenhouse' | 'lever' | 'ashby' | 'jooble' | 'adzuna'
     job          one job object from the raw response
     description  already-cleaned text (transform passes its own); computed if omitted
 
@@ -437,6 +454,8 @@ def classify_posting(source: str, job: dict, description: str | None = None) -> 
                  is (e.g. "Remote - United States" -> office "San Francisco"), so it is
                  used only when the location is a bare "Remote" and the title names no
                  geography (then it beats the description, which carries boilerplate).
+      Adzuna     location.area[0] is the country; remote/not from title, location, snippet
+      Jooble     free text only; remote/not from title, location, snippet
     """
     text = description if description is not None else posting_text(source, job)
     title = job.get("title") or job.get("text") or ""
@@ -463,6 +482,16 @@ def classify_posting(source: str, job: dict, description: str | None = None) -> 
         return _classify_parts(parts, title, text, None, None, fallback_parts=office_parts)
 
     if source == "jooble":
-        return _classify_parts([(t, None) for t in _split(job.get("location"))], title, text, None, None)
+        location = job.get("location") or ""
+        return _classify_parts([(t, None) for t in _split(location)], title, text,
+                               _snippet_workplace(title, location, text), None)
+
+    if source == "adzuna":
+        # location.area is structured: ["US", "New York", "New York City", ...]
+        loc = job.get("location") or {}
+        location = loc.get("display_name") or ""
+        country = (loc.get("area") or [None])[0]
+        parts = [(location, country)] if (location or country) else []
+        return _classify_parts(parts, title, text, _snippet_workplace(title, location, text), None)
 
     raise ValueError(f"unknown source: {source}")
