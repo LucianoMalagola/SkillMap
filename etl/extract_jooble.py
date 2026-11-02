@@ -21,10 +21,9 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-# Jooble serves each country from its own subdomain (cr.jooble.org = Costa Rica).
-# If requests return 403/404, try "https://jooble.org/api/" instead; some keys
-# are issued for the main domain only.
-DEFAULT_HOST = "https://cr.jooble.org/api/"
+# Main Jooble domain. The country is set through the "location" field.
+# (Country subdomains such as cr.jooble.org returned 403 for this key.)
+DEFAULT_HOST = "https://jooble.org/api/"
 
 DEFAULT_ROLES = [
     "data analyst",
