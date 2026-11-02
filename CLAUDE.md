@@ -92,9 +92,14 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       `market` is the company's market; big US boards also carry on-site/overseas jobs.
 - [x] `sql/03_market_and_exclusions.sql` applied to `dev` (not `main`): `jobs.market` replaces
       `country`, ATS sources allowed, `etl_runs` exclusion columns, views grouped by market.
-- [ ] **Next:** `etl/location.py`: (market, reason) classifier, EN/ES, with `tests/test_location.py`
-      built from real location strings (Jooble raw + ATS boards).
-- [ ] ATS extractors (Greenhouse, Lever, Ashby) + Remotive extractor. Save full unfiltered
+- [x] `etl/location.py`: `classify_location(location, title, description, workplace_type=,
+      is_remote=, country_code=) -> (market, reason)`, EN/ES. `tests/test_location.py` (94 cases,
+      real strings from Jooble raw + 16 ATS boards); run `python -m pytest tests/`
+      (dev deps: `requirements-dev.txt`). Rules beyond the spec: remote restricted to ONE non-CR
+      LATAM country is out of scope; 2+ LATAM countries or "Anywhere"/"Worldwide" → LATAM-remote;
+      country-level "United States" with no remote flag → US-remote only if the description says
+      remote/distributed; "Remote" + 2+ US state names in the text → US-remote.
+- [ ] **Next:** ATS extractors (Greenhouse, Lever, Ashby) + Remotive extractor. Save full unfiltered
       responses to `data/raw/<source>/<date>/`. Format notes (samples in `data/raw/samples/`):
       - Greenhouse: list with `?content=true`; `content` is double-escaped HTML (`html.unescape` first).
       - Lever: requirements often live in `lists[]` ("Who You Are"), not `descriptionPlain`;
