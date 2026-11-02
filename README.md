@@ -64,7 +64,19 @@ Snippet-based rows are flagged `description_is_full = FALSE`, so tool rankings c
 | `job_skills` | Bridge table: which tools each posting mentions |
 | `etl_runs` | Log of each pipeline run per source, including how many postings were excluded and why (powers the "last updated" indicator) |
 
-Dashboard views: `v_skill_demand` and `v_modality_mix` (by market), `v_skill_cooccurrence`.
+Dashboard views. Two time windows, named in every column:
+
+- **Last 90 days** (`*_90d`): postings seen at least once in the last 90 days, including ones that have since closed. Used for tool demand, so percentages reflect a quarter rather than one day.
+- **Open now** (`*_open_now`): postings still listed as of the latest run.
+
+| View | What it shows | Sources |
+|---|---|---|
+| `v_skill_demand` | % of postings asking for each tool, per role / market / modality | Full descriptions only |
+| `v_skill_cooccurrence` | Tools asked for together | Full descriptions only |
+| `v_modality_mix` | On-site / hybrid / remote mix per market | All sources |
+| `v_posting_counts` | Headline counts per market and role (90 days vs open now) | All sources |
+
+Each column carries a database `COMMENT` with its intended dashboard label.
 
 ## Repository structure
 

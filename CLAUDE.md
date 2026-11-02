@@ -32,6 +32,10 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - Branch `main`: production, read by dashboards. Branch `dev` (`br-polished-grass-b790an0o`): development/testing.
 - **Always develop and test against `dev`.** Only point at `main` when the pipeline is ready.
 - Schema: `sql/01_schema.sql`, seed dictionary: `sql/02_seed_skills.sql` (applied to both branches).
+  `sql/07_views_90_day_window.sql`: views use **"seen in last 90 days"** (`last_seen >= now() - 90 days`)
+  plus **"open now"** (`is_active`); column names carry the window (`_90d` / `_open_now`) and every
+  column has a COMMENT with its dashboard label. Tool views (`v_skill_demand`, `v_skill_cooccurrence`):
+  full descriptions only. Volume views (`v_modality_mix`, new `v_posting_counts`): all sources: **dev only**.
   `sql/06_ats_sources.sql`: `source` CHECK + 'recruitee', 'personio': **dev only**.
   `sql/05_views_full_text.sql`: `v_skill_demand` and `v_skill_cooccurrence` use only
   `description_is_full = TRUE` (numerator and denominator); `v_modality_mix` keeps all rows: **dev only**.
@@ -40,7 +44,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   `sql/03_market_and_exclusions.sql`: **applied to `dev` only** (2026-11-01); apply to `main` when the
   pipeline is ready. Re-runnable, single transaction.
   Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`.
-  Views: `v_skill_demand`, `v_modality_mix` (both by `market`), `v_skill_cooccurrence`.
+  Views (after 07): `v_skill_demand`, `v_skill_cooccurrence`, `v_modality_mix`, `v_posting_counts`.
 - `jobs` has `UNIQUE(source, external_id)`, `first_seen`/`last_seen`, `is_active`, `description_is_full`,
   `modality` in ('remote','hybrid','onsite','unspecified'), `market` in ('CR','US-remote','LATAM-remote')
   NOT NULL, `source` in ('jooble','adzuna','remotive','greenhouse','lever','ashby').
