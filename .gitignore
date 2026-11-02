@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Raw API responses
+data/raw/*
+!data/raw/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Notebooks / editors
+.ipynb_checkpoints/
+.vscode/
+.DS_Store
+
+# Power BI temp files
+*.pbix.bak
