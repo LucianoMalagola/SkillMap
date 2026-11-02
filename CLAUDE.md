@@ -30,27 +30,37 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 ## Database (Neon)
 - Project `skillmap`, id `autumn-pine-31779902`, region aws-us-east-1, PostgreSQL 18.6, database `skillmap`.
 - Branch `main`: production, read by dashboards. Branch `dev` (`br-polished-grass-b790an0o`): development/testing.
-- **Always develop and test against `dev`.** Only point at `main` when the pipeline is ready.
-- Schema: `sql/01_schema.sql`, seed dictionary: `sql/02_seed_skills.sql` (applied to both branches).
-  `sql/07_views_90_day_window.sql`: views use **"seen in last 90 days"** (`last_seen >= now() - 90 days`)
-  plus **"open now"** (`is_active`); column names carry the window (`_90d` / `_open_now`) and every
-  column has a COMMENT with its dashboard label. Tool views (`v_skill_demand`, `v_skill_cooccurrence`):
-  full descriptions only. Volume views (`v_modality_mix`, new `v_posting_counts`): all sources: **dev only**.
-  `sql/06_ats_sources.sql`: `source` CHECK + 'recruitee', 'personio': **dev only**.
-  `sql/05_views_full_text.sql`: `v_skill_demand` and `v_skill_cooccurrence` use only
-  `description_is_full = TRUE` (numerator and denominator); `v_modality_mix` keeps all rows: **dev only**.
-  `sql/04_seed_web_analytics.sql` (Google Analytics, Adobe Analytics, Google Tag Manager; no `gtm`
-  synonym: it means go-to-market in ads): **dev only**.
-  `sql/03_market_and_exclusions.sql`: **applied to `dev` only** (2026-11-01); apply to `main` when the
-  pipeline is ready. Re-runnable, single transaction.
-  Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`.
-  Views (after 07): `v_skill_demand`, `v_skill_cooccurrence`, `v_modality_mix`, `v_posting_counts`.
+- **Always develop and test against `dev`.** `main` is written only by the GitHub Actions workflow.
+- **Migrations (rule):** `sql/NN_<name>.sql`, applied once each, in order, by `etl/migrate.py`
+  (`python -m etl.migrate --target dev`), each in one transaction with its row in `schema_migrations`.
+  Files must not contain BEGIN/COMMIT (the runner owns the transaction) and should be re-runnable
+  (IF NOT EXISTS, CREATE OR REPLACE, ON CONFLICT). Never edit a migration once applied to main: add a new one.
+  `sql/R_*.sql` are repeatable and run after every migrate (`R_dashboard_reader.sql`: read-only role,
+  SELECT on every `v_*` view + EXECUTE on `fn_skill_match`, no tables; created without a password,
+  which is set in the Neon console).
+  **Process: dev first** (`etl.migrate --target dev`, test) → commit/push → the workflow (`--migrate`)
+  applies it to **main**. Never migrate main from a laptop (`etl/db.py` has no local fallback for main).
+  01–07 were applied by hand before the runner existed; the runner baselines them by probing their effects.
+- **Views are the contract with the dashboards:** never rename or remove a view column without telling
+  Luciano first; only append columns (CREATE OR REPLACE VIEW). `docs/view_contract.json` + the
+  `view_contract` quality check enforce it. After changing views/comments run
+  `python -m etl.gen_data_dictionary --target dev` (writes `docs/DATA_DICTIONARY.md`). Every view column
+  needs a COMMENT with its dashboard label (checked).
+- Schema history: 01 schema, 02 seed dictionary, 03 `market` replaces `country` + ATS sources + exclusion
+  logging, 04 web-analytics tools (no `gtm` synonym: go-to-market), 05 tool views full-text only,
+  06 Recruitee/Personio sources, 07 "last 90 days" / "open now" windows (`_90d` / `_open_now` names),
+  08 role families (`role_families` table + `jobs.role_family`, FK on the pair, mirrors `roles.ROLE_FAMILIES`;
+  transform_load refuses to run if they differ), `etl_runs.jobs_loaded`, `n` / `enough_data` (n >= 10)
+  on tool views, directed co-occurrence, analysis views.
+  Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`, `role_families`, `schema_migrations`.
+  Views: `v_skill_demand`, `v_skill_demand_segment`, `v_skill_cooccurrence`, `v_modality_mix`,
+  `v_posting_counts`, `v_weekly_postings`, `v_weekly_skill_trend`, `v_last_updated`, `v_postings`,
+  `v_posting_skills`, `v_roles`, `v_skills`; function `fn_skill_match(text[], grain)`.
 - `jobs` has `UNIQUE(source, external_id)`, `first_seen`/`last_seen`, `is_active`, `description_is_full`,
   `modality` in ('remote','hybrid','onsite','unspecified'), `market` in ('CR','US-remote','LATAM-remote')
-  NOT NULL, `source` in ('jooble','adzuna','remotive','greenhouse','lever','ashby').
-  Migration 03 **replaced `country` with `market`** (country had no honest value for LATAM-remote and
-  duplicated market otherwise; raw location text stays in `location_raw`).
-- `etl_runs` has `jobs_excluded` INT and `exclusion_reasons` JSONB (default `{}`).
+  NOT NULL, `role_category` / `role_family` NOT NULL, `source` in ('jooble','adzuna','remotive',
+  'greenhouse','lever','ashby','recruitee','personio').
+- `etl_runs` has `jobs_loaded`, `jobs_excluded` INT and `exclusion_reasons` JSONB (default `{}`).
 
 ## Data sources: decisions and findings
 - **Core problem:** aggregator APIs return truncated descriptions (~250–300 chars), too short
@@ -214,8 +224,17 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       First load to `dev` (2026-11-01): **12 postings** (7 CR, 5 US-remote, 0 LATAM-remote) out of 5,417.
       Finding: most data-analyst roles at these US companies are hybrid/on-site in hubs (Garner, Brex,
       Mozilla Europe, GitLab Bangalore) and drop out by location; volume will come from more sources.
-- [ ] GitHub Actions daily workflow (secrets: `DATABASE_URL` for main, API keys); upload
-      `data/raw/` as a compressed artifact, `retention-days: 5` (~7 MB/day zipped)
+- [x] `etl/run_pipeline.py` (single entry point: `python -m etl.run_pipeline --target dev|main`, flags
+      `--skip-extract`, `--date`, `--sources`, `--skip-jooble`, `--dry-run`, `--migrate`, `--migrate-only`,
+      `--no-checks`). Always transforms ONE raw day (today or `--date`), never "latest", so an old day
+      can't mark closed postings as seen. `etl/quality_checks.py` fails the run on: duplicates, NULL
+      required fields, orphans, active-but-stale, % outside 0-100, broken views, contract/label gaps,
+      a source that failed or fetched nothing, 0 loaded, a source loading <50% of its previous run (if >=10).
+- [x] GitHub Actions: `.github/workflows/pipeline.yml` (manual `target` dev|main, daily cron on main;
+      secrets `DATABASE_URL_DEV`, `DATABASE_URL_MAIN`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `JOOBLE_API_KEY`;
+      only the target's URL is passed; raw artifact 5 days) + `tests.yml` (ruff + pytest on push).
+      Repo is public: artifacts are public (keys redacted by extractors and `redact.scrub_tree`), and
+      GitHub disables scheduled workflows after 60 days without repo activity.
 - [ ] Data Studio dashboard (public link) + Power BI `.pbix` with "How well do I match?" page
 - [x] README: architecture, sources, three markets, data model, limitations, credits (Adzuna, Remotive, Jooble)
 - [ ] README: findings with numbers and dashboard screenshots (after the dashboards)

@@ -136,6 +136,40 @@ python -m etl.gen_data_dictionary --target dev
 about 4 requests a day and each full run makes 2, so for repeated local runs prefer
 `--skip-extract`.
 
+## Automation (GitHub Actions)
+
+`.github/workflows/pipeline.yml` runs `python -m etl.run_pipeline --target <dev|main> --migrate --skip-jooble`:
+
+- **Manual** (Actions → *SkillMap pipeline* → *Run workflow*): choose `target` (default `dev`),
+  optionally *migrate only* or *include Jooble*.
+- **Daily** at 11:17 UTC (05:17 Costa Rica), always against `main`. Enabled only after a manual
+  dev run and a manual main run have passed.
+- Raw API responses are uploaded as a zip artifact kept **5 days** (~7 MB a day; GitHub Free
+  storage is 500 MB). Keys are redacted before saving and scanned again before upload: the repo
+  is public, so artifacts are downloadable by anyone.
+- Any failed step or data-quality check fails the run, and GitHub emails the failure.
+- `.github/workflows/tests.yml` runs ruff and pytest on every push.
+
+Repository secrets (Settings → Secrets and variables → Actions → *New repository secret*):
+
+| Secret | Value | Where to get it |
+|---|---|---|
+| `DATABASE_URL_DEV` | Connection string of the Neon `dev` branch, role `skillmap_owner`, database `skillmap` | Neon console → project *skillmap* → **Connect** → Branch `dev`, Database `skillmap`, Role `skillmap_owner` → copy the connection string (pooled is fine) |
+| `DATABASE_URL_MAIN` | Same for the `main` branch | Same dialog with Branch `main` |
+| `ADZUNA_APP_ID` | Adzuna application ID | [developer.adzuna.com](https://developer.adzuna.com) → *Dashboard* → API Access Details (also in your local `.env`) |
+| `ADZUNA_APP_KEY` | Adzuna application key | Same page |
+| `JOOBLE_API_KEY` | Jooble API key | The key Jooble emailed you (also in your local `.env`); only used when *include Jooble* is ticked |
+
+The job only receives the connection string of the target it runs against.
+
+### Schema changes (migrations)
+
+`sql/NN_<name>.sql` files are applied once each, in order, by `etl/migrate.py` and recorded in
+the `schema_migrations` table; `sql/R_*.sql` (the read-only dashboard role and its grants) runs
+after every migrate. Process: write the migration → `python -m etl.migrate --target dev` →
+test on dev → commit and push → the next workflow run (manual or daily) applies it to `main`.
+`main` is never migrated from a laptop.
+
 ## Tech stack
 
 Python · PostgreSQL (Neon) · SQL · pytest · GitHub Actions · Google Data Studio · Power BI · DAX

@@ -1,0 +1,81 @@
+# SkillMap daily pipeline: migrate -> extract -> load -> data-quality checks.
+# A failed step fails the run, and GitHub emails the failure (scheduled runs: to the
+# person who last edited the cron line; manual runs: to whoever started it).
+#
+# Secrets (Settings -> Secrets and variables -> Actions), see README "Automation":
+#   DATABASE_URL_DEV, DATABASE_URL_MAIN, ADZUNA_APP_ID, ADZUNA_APP_KEY, JOOBLE_API_KEY
+# Only the connection string of the chosen target is passed to the job.
+
+name: SkillMap pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Database to load"
+        type: choice
+        options: [dev, main]
+        default: dev
+      migrate_only:
+        description: "Only apply pending migrations (no extraction, no load)"
+        type: boolean
+        default: false
+      include_jooble:
+        description: "Include Jooble (its key only returns US results for now)"
+        type: boolean
+        default: false
+  # Daily run, always against main. DISABLED until a manual dev run and a manual main run
+  # have passed (checkpoint 1). To enable, uncomment the two lines below.
+  # schedule:
+  #   - cron: "17 11 * * *"     # 11:17 UTC = 05:17 Costa Rica (off the hour: GitHub delays :00 jobs)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skillmap-${{ github.event_name == 'schedule' && 'main' || inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TARGET: ${{ github.event_name == 'schedule' && 'main' || inputs.target }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        env:
+          DATABASE_URL_DEV:  ${{ (github.event_name != 'schedule' && inputs.target == 'dev') && secrets.DATABASE_URL_DEV || '' }}
+          DATABASE_URL_MAIN: ${{ (github.event_name == 'schedule' || inputs.target == 'main') && secrets.DATABASE_URL_MAIN || '' }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          args="--target $TARGET --migrate"
+          if [ "${{ inputs.migrate_only }}" = "true" ]; then args="$args --migrate-only"; fi
+          if [ "${{ inputs.include_jooble }}" != "true" ]; then args="$args --skip-jooble"; fi
+          echo "python -m etl.run_pipeline $args"
+          python -m etl.run_pipeline $args
+
+      # Raw API responses, for debugging and reprocessing. Keys were redacted by the
+      # extractors and again by run_pipeline's scrub step. Public repo: anyone can download.
+      - name: Upload raw files
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: raw-${{ env.TARGET }}-${{ github.run_id }}
+          path: data/raw/
+          retention-days: 5
+          compression-level: 6
+          if-no-files-found: ignore

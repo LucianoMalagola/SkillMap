@@ -11,10 +11,18 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "etl"))
-from normalize import clean_html, detect_modality, normalize  # noqa: E402
-from roles import (ANALYTICS_INSIGHTS, BI_ANALYST, BIZOPS_ANALYST, BUSINESS_ANALYST, DATA_ANALYST,  # noqa: E402
-                   DATA_REPORTING, MARKETING_ANALYST, classify_title)
-from skills import SkillExtractor  # noqa: E402
+from normalize import clean_html, detect_modality, normalize
+from roles import (
+    ANALYTICS_INSIGHTS,
+    BI_ANALYST,
+    BIZOPS_ANALYST,
+    BUSINESS_ANALYST,
+    DATA_ANALYST,
+    DATA_REPORTING,
+    MARKETING_ANALYST,
+    classify_title,
+)
+from skills import SkillExtractor
 
 # ---- roles ---------------------------------------------------------------------------------
 

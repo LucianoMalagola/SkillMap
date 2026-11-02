@@ -22,7 +22,7 @@ import requests
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from redact import redact  # noqa: E402
+from redact import redact
 
 # Main Jooble domain. The country is set through the "location" field.
 # (Country subdomains such as cr.jooble.org returned 403 for this key.)

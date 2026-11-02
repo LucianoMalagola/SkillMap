@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "etl"))
-from location import AMBIGUOUS, CR, LATAM_REMOTE, OUT_OF_SCOPE, US_REMOTE, classify_location  # noqa: E402
+from location import AMBIGUOUS, CR, LATAM_REMOTE, OUT_OF_SCOPE, US_REMOTE, classify_location
 
 OUT = None  # expected market for excluded postings
 

@@ -88,7 +88,7 @@ def extract_commands(sources: list[str]) -> list[tuple[str, list[str]]]:
 
 
 def run(argv: list[str], env: dict | None = None) -> int:
-    return subprocess.run(argv, cwd=ROOT, env=env).returncode
+    return subprocess.run(argv, cwd=ROOT, env=env, check=False).returncode
 
 
 def main(argv: list[str] | None = None) -> int:

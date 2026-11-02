@@ -81,7 +81,7 @@ def database_checks(conn: psycopg.Connection) -> list[Result]:
                COUNT(*) FILTER (WHERE first_seen IS NULL OR last_seen IS NULL OR last_seen < first_seen)
         FROM jobs""").fetchone()
     labels = ("title", "market", "role", "modality", "full_text_without_text", "seen_dates")
-    bad = {k: v for k, v in zip(labels, nulls) if v}
+    bad = {k: v for k, v in zip(labels, nulls, strict=True) if v}
     out.append(Result("required_fields", not bad, str(bad) if bad else "0 problems"))
 
     orphans = _scalar(conn, """SELECT COUNT(*) FROM job_skills js

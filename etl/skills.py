@@ -27,7 +27,8 @@ _BOUNDARY_BEFORE = r"(?<![A-Za-z0-9])"
 _BOUNDARY_AFTER = r"(?![A-Za-z0-9])"
 _MASK = "\x00"
 
-_EXCEL_VERB_BEFORE = re.compile(r"(?:\byou|\bto|\bwill|\bcan|\bwho|\bwe|\bthey|\bwould|\bhelp\w*|\bto truly|\breally)\s+$", re.I)
+_EXCEL_VERB_BEFORE = re.compile(r"(?:\byou|\bto|\bwill|\bcan|\bwho|\bwe|\bthey|\bwould|\bhelp\w*|\bto truly|\breally)\s+$",
+                                re.I)
 _EXCEL_VERB_AFTER = re.compile(r"^\s+(?:at|in|as|when|by|with)\b", re.I)
 _EPIC_CONTEXT = re.compile(r"\b(?:EMR|EHR|electronic (?:health|medical) records?|clinical|Cerner|Athena|eClinicalWorks|"
                            r"Clarity|Caboodle|Cogito|Hyperspace|MyChart|health ?care)\b", re.I)
@@ -59,9 +60,8 @@ class SkillExtractor:
         if syn == "excel":
             if _EXCEL_VERB_BEFORE.search(text[max(0, s - 20):s]):
                 return False
-            if match.group().islower() and _EXCEL_VERB_AFTER.search(text[e:e + 12]):
-                return False
-            return True
+            # lower-case "excel at / in ..." is the verb
+            return not (match.group().islower() and _EXCEL_VERB_AFTER.search(text[e:e + 12]))
         if syn == "epic":
             return match.group() == "Epic" and bool(_EPIC_CONTEXT.search(_window(text, s, e, 80)))
         if syn == "macros":

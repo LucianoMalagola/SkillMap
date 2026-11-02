@@ -54,10 +54,10 @@ from dotenv import load_dotenv
 from psycopg.types.json import Jsonb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from location import classify_group, classify_posting  # noqa: E402
-from normalize import ATS_SOURCES, detect_modality, is_placeholder, normalize, parse_board  # noqa: E402
-from roles import ROLE_FAMILIES, classify_title  # noqa: E402
-from skills import SkillExtractor  # noqa: E402
+from location import classify_group, classify_posting
+from normalize import ATS_SOURCES, detect_modality, is_placeholder, normalize, parse_board
+from roles import ROLE_FAMILIES, classify_title
+from skills import SkillExtractor
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"
@@ -218,35 +218,34 @@ def load(conn: psycopg.Connection, source: str, rows: list[dict], ok_companies: 
     """seen_ids: every external_id present in today's raw data for this source."""
     stats = Counter()
     loaded_ids = [r["external_id"] for r in rows]
-    with conn.transaction():
-        with conn.cursor() as cur:
-            if seen_ids:   # in today's raw data but excluded by today's rules -> remove (job_skills cascade)
-                cur.execute("""DELETE FROM jobs WHERE source = %s AND external_id = ANY(%s)
+    with conn.transaction(), conn.cursor() as cur:
+        if seen_ids:   # in today's raw data but excluded by today's rules -> remove (job_skills cascade)
+            cur.execute("""DELETE FROM jobs WHERE source = %s AND external_id = ANY(%s)
                                AND NOT (external_id = ANY(%s))""", (source, seen_ids, loaded_ids))
-                stats["removed"] += cur.rowcount
-            for row in rows:
-                job_id, inserted = cur.execute(UPSERT_SQL, row).fetchone()
-                stats["new" if inserted else "updated"] += 1
-                cur.execute("DELETE FROM job_skills WHERE job_id = %s", (job_id,))
-                if row["skills"]:
-                    cur.executemany("INSERT INTO job_skills (job_id, skill_id) VALUES (%s, %s)",
-                                    [(job_id, skill_ids[s]) for s in row["skills"]])
+            stats["removed"] += cur.rowcount
+        for row in rows:
+            job_id, inserted = cur.execute(UPSERT_SQL, row).fetchone()
+            stats["new" if inserted else "updated"] += 1
+            cur.execute("DELETE FROM job_skills WHERE job_id = %s", (job_id,))
+            if row["skills"]:
+                cur.executemany("INSERT INTO job_skills (job_id, skill_id) VALUES (%s, %s)",
+                                [(job_id, skill_ids[s]) for s in row["skills"]])
 
-            if ok_companies:   # ATS boards fetched OK today: anything not loaded today is gone
-                loaded_ids = [r["external_id"] for r in rows]
-                cur.execute("""UPDATE jobs SET is_active = FALSE
+        if ok_companies:   # ATS boards fetched OK today: anything not loaded today is gone
+            loaded_ids = [r["external_id"] for r in rows]
+            cur.execute("""UPDATE jobs SET is_active = FALSE
                                WHERE source = %s AND is_active AND company = ANY(%s)
                                  AND NOT (external_id = ANY(%s))""", (source, ok_companies, loaded_ids))
-                stats["deactivated"] += cur.rowcount
-            if full_inventory:  # whole source fetched completely (Remotive): same rule, source-wide
-                cur.execute("""UPDATE jobs SET is_active = FALSE
-                               WHERE source = %s AND is_active AND NOT (external_id = ANY(%s))""",
-                            (source, [r["external_id"] for r in rows]))
-                stats["deactivated"] += cur.rowcount
-            cur.execute("""UPDATE jobs SET is_active = FALSE
-                           WHERE source = %s AND is_active AND last_seen < now() - make_interval(days => %s)""",
-                        (source, STALE_DAYS))
             stats["deactivated"] += cur.rowcount
+        if full_inventory:  # whole source fetched completely (Remotive): same rule, source-wide
+            cur.execute("""UPDATE jobs SET is_active = FALSE
+                               WHERE source = %s AND is_active AND NOT (external_id = ANY(%s))""",
+                        (source, [r["external_id"] for r in rows]))
+            stats["deactivated"] += cur.rowcount
+        cur.execute("""UPDATE jobs SET is_active = FALSE
+                           WHERE source = %s AND is_active AND last_seen < now() - make_interval(days => %s)""",
+                    (source, STALE_DAYS))
+        stats["deactivated"] += cur.rowcount
     return stats
 
 
@@ -315,7 +314,7 @@ def main() -> int:
                 print(f"[{source}] loaded: {stats['new']} new, {stats['updated']} updated, "
                       f"{stats['removed']} removed (excluded by current rules), "
                       f"{stats['deactivated']} deactivated (etl_runs.run_id={run_id})")
-            except Exception as err:   # record the failure, keep going with the other sources
+            except Exception as err:  # noqa: BLE001 -- any error: log it in etl_runs, go on with the next source
                 failures += 1
                 finish_run(conn, run_id, "failed", len(items), 0, excluded, f"{type(err).__name__}: {err}")
                 print(f"[{source}] FAILED, rolled back: {type(err).__name__}: {err}")

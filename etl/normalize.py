@@ -282,13 +282,14 @@ def _recruitee_workplace(job: dict) -> str | None:
 def _recruitee_locations(job: dict) -> str:
     locs = []
     for loc in job.get("locations") or []:
-        place = ", ".join(x.strip() for x in (loc.get("city") or loc.get("name") or "", loc.get("country") or "") if x and x.strip())
+        parts = (loc.get("city") or loc.get("name") or "", loc.get("country") or "")
+        place = ", ".join(x.strip() for x in parts if x and x.strip())
         if place and place not in locs:
             locs.append(place)
     if not locs:
         place = ", ".join(x.strip() for x in (job.get("city") or "", job.get("country") or "") if x and x.strip())
         locs = [place or (job.get("location") or "")]
-    return " | ".join(l for l in locs if l)
+    return " | ".join(loc for loc in locs if loc)
 
 
 def _personio_text(job: dict) -> str:

@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from etl import migrate  # noqa: E402
+from etl import migrate
 
 
 def test_versions_are_unique_and_contiguous():

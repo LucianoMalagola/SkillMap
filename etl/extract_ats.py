@@ -23,11 +23,11 @@ Usage:
 
 import argparse
 import csv
-import xml.etree.ElementTree as ET
 import json
 import re
 import sys
 import time
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -35,7 +35,7 @@ from urllib.parse import quote
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from normalize import parse_board  # noqa: E402
+from normalize import parse_board
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_COMPANIES = ROOT / "etl" / "companies.csv"

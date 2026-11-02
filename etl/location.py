@@ -353,11 +353,10 @@ def _classify_parts(
             if reason == OUT_OF_SCOPE:      # e.g. office "Remote France"
                 return None, OUT_OF_SCOPE
         return _text_fallback(f"{title} {description}")
-    if us_region_level_onsite:
-        # "United States" / "Colorado, United States" with no remote flag: many boards
-        # use this for remote roles, so check the description.
-        if TEXT_REMOTE_RE.search(_norm(f"{title} {description}")):
-            return US_REMOTE, "us_region_remote_in_text"
+    # "United States" / "Colorado, United States" with no remote flag: many boards
+    # use this for remote roles, so check the description.
+    if us_region_level_onsite and TEXT_REMOTE_RE.search(_norm(f"{title} {description}")):
+        return US_REMOTE, "us_region_remote_in_text"
     return None, OUT_OF_SCOPE
 
 

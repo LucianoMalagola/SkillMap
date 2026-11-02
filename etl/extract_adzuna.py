@@ -35,7 +35,7 @@ import requests
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from redact import redact  # noqa: E402
+from redact import redact
 
 API_URL = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
 

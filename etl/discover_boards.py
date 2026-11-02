@@ -23,18 +23,17 @@ import json
 import re
 import sys
 import threading
-import xml.etree.ElementTree as ET
 import time
-from urllib.parse import urlsplit
-from urllib.parse import quote
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
+from urllib.parse import quote, urlsplit
 
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from normalize import parse_board  # noqa: E402
+from normalize import parse_board
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CANDIDATES = ROOT / "etl" / "company_candidates.csv"
@@ -106,12 +105,13 @@ def normalize_jobs(ats: str, payload) -> list[dict]:
         return jobs
     if ats == "recruitee":
         return [{"title": j.get("title", ""),
-                 "location": " | ".join(filter(None, [l.get("city") or l.get("name") for l in j.get("locations") or []]
-                                               + [l.get("country") for l in j.get("locations") or []]
+                 "location": " | ".join(filter(None, [loc.get("city") or loc.get("name") for loc in j.get("locations") or []]
+                                               + [loc.get("country") for loc in j.get("locations") or []]
                                                + (["Remote"] if j.get("remote") else [])))}
                 for j in payload.get("offers", [])]
     if ats == "personio":
-        return [{"title": j.get("name", ""), "location": " | ".join(filter(None, [j.get("office")] + j.get("additionalOffices", [])))}
+        return [{"title": j.get("name", ""),
+                 "location": " | ".join(filter(None, [j.get("office")] + j.get("additionalOffices", [])))}
                 for j in payload]
     if ats == "ashby":
         jobs = []
