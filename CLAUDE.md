@@ -49,7 +49,8 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - **Core problem:** aggregator APIs return truncated descriptions (~250–300 chars), too short
   to extract tools reliably. So sources are split:
   - **Full descriptions → tool demand:** public ATS job-board endpoints (Greenhouse, Lever, Ashby)
-    for a curated list of companies hiring data roles in Costa Rica or US-remote, plus Remotive (remote).
+    for a curated list of companies hiring data roles in Costa Rica or US-remote, plus Remotive (remote;
+    currently a 12-job sample, see Status).
     These endpoints are official and public. Do NOT scrape LinkedIn or Jooble description pages.
   - **Snippets → market volume** (counts, modality mix, salaries): Jooble, Adzuna.
     Mark these rows `description_is_full = FALSE`.
@@ -135,7 +136,16 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       3.7k–6.4k chars.
 - [x] `etl/extract_adzuna.py` + Adzuna in transform (see Data sources). Snippet sources (Jooble,
       Adzuna) get remote/not from title, location, snippet (`location._snippet_workplace`).
-- [ ] Remotive extractor (remote postings, full descriptions).
+- [x] `etl/extract_remotive.py` + Remotive in transform. Categories `data` and `operations` = 2 requests
+      per run, 35 s apart (terms: max ~4/day, >2/min blocked; link back to the Remotive URL and name
+      Remotive as source; don't resubmit jobs to other boards). Full HTML descriptions →
+      `description_is_full = TRUE`; always remote; `candidate_required_location` is the location;
+      salary parsed from text ($ only, monthly ×12, hourly/per-task/OTE skipped). Each category
+      response is a complete list → if all categories OK, missing postings are deactivated.
+      **Finding (2026-11-01): the free public API returns a fixed sample of 12 jobs and ignores
+      `category` and `search`** (same 12 IDs for data, operations and search=analyst; none are data
+      roles). Full feed = private paid API (from $5k/month). Kept running (cheap, within terms) in
+      case filtering returns; it currently loads 0 rows.
 - [x] `etl/transform_load.py` (+ `etl/normalize.py`, `etl/roles.py`, `etl/skills.py`; tests in
       `tests/test_transform.py`). Latest raw day per source; ATS via `_manifest.json` (only `ok` boards).
       Exclusions counted once, first reason wins: `no_text` → location (`out_of_scope` /

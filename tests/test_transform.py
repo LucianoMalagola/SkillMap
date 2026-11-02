@@ -170,3 +170,36 @@ def test_adzuna_url_tracking_removed_and_predicted_salary_skipped():
     assert n["salary_min"] is None and n["company"] == "Acme" and n["description_is_full"] is False
     n = normalize("adzuna", {**job, "salary_is_predicted": "0"}, "")
     assert (n["salary_min"], n["salary_currency"]) == (90000, "USD")
+
+
+# ---- Remotive (real values from the 2026-11-01 API response) ---------------------------------
+from location import classify_posting  # noqa: E402
+
+
+@pytest.mark.parametrize("location, expected", [
+    ("Worldwide", ("LATAM-remote", "worldwide")),
+    ("USA, Canada, USA timezones", ("US-remote", "us_remote")),
+    ("Europe, USA, Canada, APAC", ("US-remote", "us_remote")),
+    ("Europe, USA, Canada, Australia, Singapore, Mexico, Saudi Arabia", ("US-remote", "us_remote")),
+    ("Europe", (None, "out_of_scope")),                                 # synthetic
+    ("Latin America", ("LATAM-remote", "latam_region")),                # synthetic
+])
+def test_remotive_location(location, expected):
+    job = {"id": 1, "title": "Data Analyst", "candidate_required_location": location, "description": "<p>x</p>"}
+    assert classify_posting("remotive", job) == expected
+
+
+@pytest.mark.parametrize("salary, expected", [
+    ("$170k - $200k", (170000, 200000, "USD")),
+    ("$3.5k–$5k/month", (42000, 60000, "USD")),
+    ("$35,3k- $52k", (35300, 52000, "USD")),
+    ("70K-80K", (None, None, None)),             # no currency: skipped
+    ("$1000 per task", (None, None, None)),
+    ("OTE $25k - $35k", (None, None, None)),
+])
+def test_remotive_salary(salary, expected):
+    job = {"id": 1, "title": "t", "candidate_required_location": "Worldwide", "description": "<p>x</p>",
+           "salary": salary, "url": "https://remotive.com/remote-jobs/x", "publication_date": "2026-10-30T12:00:00"}
+    n = normalize("remotive", job, "")
+    assert (n["salary_min"], n["salary_max"], n["salary_currency"]) == expected
+    assert n["description_is_full"] is True and n["url"].startswith("https://remotive.com/")

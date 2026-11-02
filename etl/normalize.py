@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 ATS_SOURCES = ("greenhouse", "lever", "ashby")
+FULL_TEXT_SOURCES = ATS_SOURCES + ("remotive",)     # description_is_full = TRUE
 SNIPPET_SOURCES = ("jooble", "adzuna")
 
 # ---- HTML -> text ------------------------------------------------------------------------
@@ -131,7 +132,27 @@ def _strip_tracking(url: str | None) -> str | None:
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
+_MONEY = re.compile(r"\$\s*(\d+(?:[.,]\d+)?)\s*(k)?", re.I)
+
+
+def _salary_from_text(text: str | None) -> tuple[float | None, float | None, str | None]:
+    """Remotive's free-text salary: "$170k - $200k", "$3.5k-$5k/month". Only dollar amounts;
+    monthly is annualised; hourly, per-task and OTE (sales commission) are skipped."""
+    if not text or re.search(r"hour|/hr|\bhr\b|task|\bote\b|commission", text, re.I):
+        return None, None, None
+    amounts = []
+    for number, k in _MONEY.findall(text):
+        value = float(number.replace(",", "."))          # "$35,3k" is 35.3k
+        amounts.append(value * 1000 if k else value)
+    if not amounts:
+        return None, None, None
+    factor = 12 if re.search(r"month|/mo\b|mensual", text, re.I) else 1
+    return min(amounts) * factor, max(amounts) * factor, "USD"
+
+
 def _salary(source: str, job: dict) -> tuple[float | None, float | None, str | None]:
+    if source == "remotive":
+        return _salary_from_text(job.get("salary"))
     if source == "adzuna":
         # Most Adzuna salaries are Adzuna's own estimates (salary_is_predicted = "1"): skip those.
         if str(job.get("salary_is_predicted")) == "0" and job.get("salary_min"):
@@ -205,6 +226,12 @@ def normalize(source: str, job: dict, company: str) -> dict:
                       description=clean_html(job.get("snippet")), url=job.get("link"),
                       posted_at=_parse_datetime(job.get("updated")), workplace_type=None)
         company = job.get("company") or company
+    elif source == "remotive":
+        fields = dict(external_id=str(job["id"]), title=job.get("title"),
+                      location_raw=job.get("candidate_required_location"),
+                      description=clean_html(job.get("description")), url=job.get("url"),
+                      posted_at=_parse_datetime(job.get("publication_date")), workplace_type="remote")
+        company = job.get("company_name") or company
     elif source == "adzuna":
         fields = dict(external_id=str(job["id"]), title=job.get("title"),
                       location_raw=(job.get("location") or {}).get("display_name"),
@@ -216,6 +243,6 @@ def normalize(source: str, job: dict, company: str) -> dict:
 
     salary_min, salary_max, currency = _salary(source, job)
     fields.update(source=source, company=company, salary_min=salary_min, salary_max=salary_max,
-                  salary_currency=currency, description_is_full=source in ATS_SOURCES,
+                  salary_currency=currency, description_is_full=source in FULL_TEXT_SOURCES,
                   title=(fields["title"] or "").strip(), description=(fields["description"] or "").strip())
     return fields

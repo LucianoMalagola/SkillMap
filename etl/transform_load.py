@@ -1,7 +1,7 @@
 """
 SkillMap: transform the latest raw files and load in-scope postings into PostgreSQL.
 
-For each source (greenhouse, lever, ashby, jooble, adzuna):
+For each source (greenhouse, lever, ashby, jooble, adzuna, remotive):
   1. Read the latest data/raw/<source>/<date>/ (ATS: only boards marked "ok" in _manifest.json).
   2. Normalize each posting (etl/normalize.py): HTML cleanup, Lever plain-text fallback.
   3. Exclude, counting each posting under the FIRST reason it fails:
@@ -14,7 +14,8 @@ For each source (greenhouse, lever, ashby, jooble, adzuna):
   4. Detect modality, extract tools (etl/skills.py, synonyms from the DB).
   5. Upsert into jobs (ON CONFLICT (source, external_id)), replace job_skills.
   6. Deactivate stale jobs:
-       - boards fetched OK today: their active jobs not loaded today
+       - boards fetched OK today (and Remotive, when every category was fetched): their
+         active jobs not loaded today
        - any source: jobs not seen for STALE_DAYS (covers Jooble, whose search results
          aren't a full inventory, and boards removed from companies.csv)
   7. Log one etl_runs row per source with exclusion counts by reason.
@@ -52,7 +53,7 @@ from skills import SkillExtractor  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"
-SOURCES = ("greenhouse", "lever", "ashby", "jooble", "adzuna")
+SOURCES = ("greenhouse", "lever", "ashby", "jooble", "adzuna", "remotive")
 STALE_DAYS = 14
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -67,12 +68,13 @@ def latest_day_dir(source: str, day: str | None) -> Path | None:
         candidate = base / day
         return candidate if candidate.is_dir() else None
     days = sorted(d for d in base.iterdir() if d.is_dir() and DAY_RE.match(d.name)
-                  and (source not in ATS_SOURCES or (d / "_manifest.json").exists()))
+                  and (source not in ATS_SOURCES + ("remotive",) or (d / "_manifest.json").exists()))
     return days[-1] if days else None
 
 
-def read_raw(source: str, day_dir: Path) -> tuple[list[tuple[str, dict]], list[str] | None, int]:
-    """Return ([(company, job), ...], companies fetched OK (ATS only), boards failed)."""
+def read_raw(source: str, day_dir: Path) -> tuple[list[tuple[str, dict]], list[str] | None, int, bool]:
+    """Return ([(company, job), ...], companies fetched OK (ATS only), boards/categories failed,
+    full_inventory: True when the whole source was fetched completely (Remotive))."""
     if source in ATS_SOURCES:
         manifest = json.loads((day_dir / "_manifest.json").read_text(encoding="utf-8"))
         items, ok_companies, failed = [], [], 0
@@ -84,7 +86,22 @@ def read_raw(source: str, day_dir: Path) -> tuple[list[tuple[str, dict]], list[s
             for job in (payload if source == "lever" else payload["jobs"]):
                 items.append((board["company"], job))
             ok_companies.append(board["company"])
-        return items, ok_companies, failed
+        return items, ok_companies, failed, False
+
+    if source == "remotive":
+        # One file per category; each is that category's complete current list. The same
+        # posting can appear in several categories.
+        manifest = json.loads((day_dir / "_manifest.json").read_text(encoding="utf-8"))
+        items, seen, failed = [], set(), 0
+        for entry in manifest["categories"]:
+            if entry["status"] != "ok":
+                failed += 1
+                continue
+            for job in json.loads((day_dir / entry["file"]).read_text(encoding="utf-8"))["jobs"]:
+                if str(job["id"]) not in seen:
+                    seen.add(str(job["id"]))
+                    items.append(("", job))
+        return items, None, failed, failed == 0 and bool(manifest["categories"])
 
     # Search APIs (Jooble, Adzuna): one file per query; the same posting can come back in
     # several queries. Results aren't a full inventory, so no per-board deactivation.
@@ -97,7 +114,7 @@ def read_raw(source: str, day_dir: Path) -> tuple[list[tuple[str, dict]], list[s
             if str(job.get("id")) not in seen:
                 seen.add(str(job.get("id")))
                 items.append(("", job))
-    return items, None, 0
+    return items, None, 0, False
 
 
 # ---- transform -------------------------------------------------------------------------------
@@ -156,7 +173,7 @@ RETURNING job_id, (xmax = 0) AS inserted
 
 
 def load(conn: psycopg.Connection, source: str, rows: list[dict], ok_companies: list[str] | None,
-         skill_ids: dict[str, int]) -> dict:
+         skill_ids: dict[str, int], full_inventory: bool = False) -> dict:
     stats = Counter()
     with conn.transaction():
         with conn.cursor() as cur:
@@ -173,6 +190,11 @@ def load(conn: psycopg.Connection, source: str, rows: list[dict], ok_companies: 
                 cur.execute("""UPDATE jobs SET is_active = FALSE
                                WHERE source = %s AND is_active AND company = ANY(%s)
                                  AND NOT (external_id = ANY(%s))""", (source, ok_companies, loaded_ids))
+                stats["deactivated"] += cur.rowcount
+            if full_inventory:  # whole source fetched completely (Remotive): same rule, source-wide
+                cur.execute("""UPDATE jobs SET is_active = FALSE
+                               WHERE source = %s AND is_active AND NOT (external_id = ANY(%s))""",
+                            (source, [r["external_id"] for r in rows]))
                 stats["deactivated"] += cur.rowcount
             cur.execute("""UPDATE jobs SET is_active = FALSE
                            WHERE source = %s AND is_active AND last_seen < now() - make_interval(days => %s)""",
@@ -219,7 +241,7 @@ def main() -> int:
             if day_dir is None:
                 print(f"[{source}] no raw data found, skipped")
                 continue
-            items, ok_companies, failed_boards = read_raw(source, day_dir)
+            items, ok_companies, failed_boards, full_inventory = read_raw(source, day_dir)
             rows, excluded = transform(source, items, extractor)
             boards = f", {len(ok_companies)} boards ok / {failed_boards} failed" if ok_companies is not None else ""
             print(f"[{source}] {day_dir.name}: {len(items)} postings{boards} -> {len(rows)} to load; "
@@ -229,7 +251,7 @@ def main() -> int:
 
             run_id = start_run(conn, source)
             try:
-                stats = load(conn, source, rows, ok_companies, skill_ids)
+                stats = load(conn, source, rows, ok_companies, skill_ids, full_inventory)
                 finish_run(conn, run_id, "success", len(items), stats["new"], excluded)
                 print(f"[{source}] loaded: {stats['new']} new, {stats['updated']} updated, "
                       f"{stats['deactivated']} deactivated (etl_runs.run_id={run_id})")

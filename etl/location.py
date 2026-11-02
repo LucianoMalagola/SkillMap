@@ -416,7 +416,7 @@ def posting_text(source: str, job: dict) -> str:
         return job.get("descriptionPlain") or _strip_html(job.get("descriptionHtml"))
     if source == "jooble":
         return _strip_html(job.get("snippet"))
-    if source == "adzuna":
+    if source in ("adzuna", "remotive"):
         return _strip_html(job.get("description"))
     raise ValueError(f"unknown source: {source}")
 
@@ -443,7 +443,7 @@ def _ashby_country(entry: dict) -> str | None:
 def classify_posting(source: str, job: dict, description: str | None = None) -> tuple[str | None, str]:
     """Classify one raw posting, exactly as the API returned it.
 
-    source       'greenhouse' | 'lever' | 'ashby' | 'jooble' | 'adzuna'
+    source       'greenhouse' | 'lever' | 'ashby' | 'jooble' | 'adzuna' | 'remotive'
     job          one job object from the raw response
     description  already-cleaned text (transform passes its own); computed if omitted
 
@@ -456,6 +456,7 @@ def classify_posting(source: str, job: dict, description: str | None = None) -> 
                  geography (then it beats the description, which carries boilerplate).
       Adzuna     location.area[0] is the country; remote/not from title, location, snippet
       Jooble     free text only; remote/not from title, location, snippet
+      Remotive   always remote; candidate_required_location is the location
     """
     text = description if description is not None else posting_text(source, job)
     title = job.get("title") or job.get("text") or ""
@@ -493,5 +494,11 @@ def classify_posting(source: str, job: dict, description: str | None = None) -> 
         country = (loc.get("area") or [None])[0]
         parts = [(location, country)] if (location or country) else []
         return _classify_parts(parts, title, text, _snippet_workplace(title, location, text), None)
+
+    if source == "remotive":
+        # Remote-only board; candidate_required_location says who may apply
+        # ("Worldwide", "USA, Canada", "Latin America").
+        location = job.get("candidate_required_location") or ""
+        return _classify_parts([(t, None) for t in _split(location)], title, text, "remote", None)
 
     raise ValueError(f"unknown source: {source}")
