@@ -99,22 +99,34 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       LATAM country is out of scope; 2+ LATAM countries or "Anywhere"/"Worldwide" → LATAM-remote;
       country-level "United States" with no remote flag → US-remote only if the description says
       remote/distributed; "Remote" + 2+ US state names in the text → US-remote.
-- [ ] **Next:** ATS extractors (Greenhouse, Lever, Ashby) + Remotive extractor. Save full unfiltered
-      responses to `data/raw/<source>/<date>/`. Format notes (samples in `data/raw/samples/`):
-      - Greenhouse: list with `?content=true`; `content` is double-escaped HTML (`html.unescape` first).
+- [x] `etl/extract_ats.py`: all boards in `etl/companies.csv`, raw bodies saved byte-for-byte to
+      `data/raw/<ats>/<date>/<token>.json` + `_manifest.json` (status / n_jobs / file per board;
+      partial re-runs merge into it). Sequential, 1 s between boards, retries on network/429/5xx;
+      a failed board is recorded and the run continues (exit 1 only if every board fails).
+      First run (2026-11-01): 48/48 boards, 5,400 postings, 83.5 MB, ~80 s. Verified: counts match
+      Greenhouse `meta.total`, Lever returns everything without pagination, median description
+      3.7k–6.4k chars.
+- [ ] Remotive extractor (remote postings, full descriptions).
+- [ ] **Next:** `etl/transform_load.py`. Read ATS files via each `_manifest.json`; **only deactivate
+      stale jobs for boards with status `ok` that day** (a failed fetch is not a closed job).
+      Format notes (samples in `data/raw/samples/`):
+      - Greenhouse: `content` is double-escaped HTML (`html.unescape` first).
       - Lever: requirements often live in `lists[]` ("Who You Are"), not `descriptionPlain`;
-        concatenate description + lists + additional. Gives `workplaceType` and `country`.
-      - Ashby: `descriptionPlain`, `isRemote`, `workplaceType`, `secondaryLocations`;
-        `?includeCompensation=true` for salary.
-      - Bluelight posts one copy per location (612 postings, 9 titles): dedupe by title + description.
-- [ ] `etl/transform_load.py`: HTML cleanup, title/role filter, market classification via
+        concatenate description + lists + additional. `descriptionPlain` can be empty while the
+        HTML `description` is full (CSC "Seasonal Custom Boot Fitter"): fall back to stripping
+        `description`. 2 CSC postings have no text at all. Gives `workplaceType` and `country`.
+      - Ashby: `descriptionPlain`, `isRemote` (unreliable: trust `workplaceType`),
+        `secondaryLocations`, `compensation`.
+      - Bluelight posts one copy per location (612 postings, 9 titles): `etl/location.py` keeps only
+        the Costa Rica copies; still dedupe by title + description.
+      Then: HTML cleanup, title/role filter, market classification via
       `etl/location.py` (load only in-scope postings), tool extraction via `skill_synonyms`
       (regex with word boundaries; beware false positives like "R" and "Epic"), bilingual modality
       classification (remote/remoto/teletrabajo, hybrid/híbrido, on-site/presencial), upsert with
       `ON CONFLICT (source, external_id) DO UPDATE SET last_seen = now()`, deactivate stale jobs,
       log each run in `etl_runs` incl. `jobs_excluded` and `exclusion_reasons`
 - [ ] GitHub Actions daily workflow (secrets: `DATABASE_URL` for main, API keys); upload
-      `data/raw/` as a short-retention artifact
+      `data/raw/` as a short-retention artifact (~85 MB/day from the ATS boards alone)
 - [ ] Data Studio dashboard (public link) + Power BI `.pbix` with "How well do I match?" page
 - [ ] README: findings with numbers, screenshots, limitations
 
