@@ -29,10 +29,9 @@ on:
         description: "Skip TheirStack (saves credits; 200/month shared by every run)"
         type: boolean
         default: false
-  # Daily run, always against main. DISABLED until a manual dev run and a manual main run
-  # have passed (checkpoint 1). To enable, uncomment the two lines below.
-  # schedule:
-  #   - cron: "17 11 * * *"     # 11:17 UTC = 05:17 Costa Rica (off the hour: GitHub delays :00 jobs)
+  # Daily run, always against main.
+  schedule:
+    - cron: "17 11 * * *"     # 11:17 UTC = 05:17 Costa Rica (off the hour: GitHub delays :00 jobs)
 
 permissions:
   contents: read
