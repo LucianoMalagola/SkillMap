@@ -9,6 +9,7 @@ SkillMap: run the whole pipeline. The one command used locally AND by GitHub Act
     python -m etl.run_pipeline --target dev --skip theirstack   # everything except some sources
     python -m etl.run_pipeline --target dev --dry-run           # transform + report, write nothing
     python -m etl.run_pipeline --target main --migrate          # what the workflow runs
+    python -m etl.run_pipeline --target main --migrate --skip-if-ran-today   # the scheduled runs
 
 Steps:
   1. --migrate: apply pending migrations (etl/migrate.py). The workflow always passes it, so
@@ -17,7 +18,7 @@ Steps:
      extract_jooble / extract_theirstack for the selected sources. A failing extractor doesn't
      stop the others; the run is marked failed at the end.
      TheirStack is metered (credits shared by dev, main and local runs): it gets
-     --since <the per-query cursors of the last successful extraction on the target> and a
+     --since / --seen-ids <the cursors of the last successful extraction on the target> and a
      per-run cap (THEIRSTACK_MAX_CREDITS: small on dev, enough for the 90-day backfill on main;
      --theirstack-max-credits overrides). The extractor also never exceeds the month's
      credits; hitting a cap is logged, not a failure, and the cursor keeps its place.
@@ -27,6 +28,7 @@ Steps:
      closed postings as seen today.
   5. Data-quality checks (etl/quality_checks.py) on the database and on this run.
      Any failure -> exit code 1 (fails the GitHub job, which sends the failure email).
+  6. A complete run with no failures is recorded in pipeline_runs, which --skip-if-ran-today reads.
 
 Target database: see etl/db.py (dev: DATABASE_URL_DEV or DATABASE_URL; main: DATABASE_URL_MAIN).
 """
@@ -96,8 +98,8 @@ def extract_commands(sources: list[str], theirstack_args: list[str] | None = Non
     return cmds
 
 
-def theirstack_since(conn) -> list[str]:
-    """--since values from the last successful extraction (api_units_used is only set when the run
+def theirstack_cursor_args(conn) -> list[str]:
+    """--since / --seen-ids from the last successful extraction (api_units_used is only set when the run
     extracted, so reprocessing raw files can't move the cursor). [] or a query left out = backfill.
     Runs from before migration 11 have no cursor: their start minus an overlap, for every query."""
     row = conn.execute("""SELECT source_cursor, started_at FROM etl_runs
@@ -108,8 +110,16 @@ def theirstack_since(conn) -> list[str]:
         return []
     cursor, started = row
     if cursor is None:
-        return [(started - SINCE_OVERLAP).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")]
-    return [f"{query}={timestamp}" for query, timestamp in cursor.items() if timestamp]
+        return ["--since", (started - SINCE_OVERLAP).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")]
+    since = [f"{query}={timestamp}" for query, timestamp in cursor.items() if query != "seen_ids" and timestamp]
+    seen = [f"{query}={','.join(map(str, ids))}" for query, ids in cursor.get("seen_ids", {}).items()]
+    return (["--since", *since] if since else []) + (["--seen-ids", *seen] if seen else [])
+
+
+def ran_today(conn) -> bool:
+    """A complete run already ended successfully this UTC day (pipeline_runs, migration 13)."""
+    return conn.execute("""SELECT EXISTS (SELECT 1 FROM pipeline_runs
+                           WHERE (finished_at AT TIME ZONE 'UTC')::date = (now() AT TIME ZONE 'UTC')::date)""").fetchone()[0]
 
 
 def run(argv: list[str], env: dict | None = None) -> int:
@@ -130,6 +140,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--migrate", action="store_true", help="apply pending migrations first")
     parser.add_argument("--migrate-only", action="store_true", help="apply pending migrations and stop")
     parser.add_argument("--no-checks", action="store_true", help="skip the data-quality checks")
+    parser.add_argument("--skip-if-ran-today", action="store_true",
+                        help="do nothing if a complete run already succeeded this UTC day (the scheduled runs)")
     args = parser.parse_args(argv)
 
     day = args.date or date.today().isoformat()
@@ -160,12 +172,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     with psycopg.connect(url, autocommit=True) as conn:
+        if args.skip_if_ran_today and ran_today(conn):
+            log("A complete run already succeeded today (UTC): nothing to do.")
+            return 0
         run_start = conn.execute("SELECT now()").fetchone()[0]   # DB clock: etl_runs uses it too
-        since = theirstack_since(conn) if "theirstack" in sources else []
+        cursor_args = theirstack_cursor_args(conn) if "theirstack" in sources else []
     theirstack_args = ["--max-credits", str(args.theirstack_max_credits if args.theirstack_max_credits is not None
                                             else THEIRSTACK_MAX_CREDITS[args.target])]
-    if since:
-        theirstack_args += ["--since", *since]
+    theirstack_args += cursor_args
 
     # 2. extract
     if not skip_extract:
@@ -203,6 +217,10 @@ def main(argv: list[str] | None = None) -> int:
             with open(summary, "a", encoding="utf-8") as f:
                 f.write(f"### SkillMap {args.target}, {day}\n\n| Check | Result | Detail |\n|---|---|---|\n")
                 f.writelines(f"| {r.name} | {'✅' if r.ok else '❌'} | {r.detail} |\n" for r in results)
+
+    if not failures and not (skip_extract or args.dry_run or args.no_checks or args.sources):
+        with psycopg.connect(url, autocommit=True) as conn:
+            conn.execute("INSERT INTO pipeline_runs (started_at) VALUES (%s)", (run_start,))
 
     log(f"\nFinished in {time.monotonic() - started:.0f} s: "
         + ("OK" if not failures else "FAILED: " + "; ".join(failures)))

@@ -17,7 +17,8 @@ Edit labels in a migration (`COMMENT ON ...`), not here. The text before "## Vie
 | **Open now** (`*_open_now`, `open_now`) | Still listed as of the latest pipeline run (`jobs.is_active`). |
 | **Full description** | `description_is_full = TRUE`: ATS boards and Remotive. Tool views count only these, in numerator **and** denominator. Adzuna/Jooble snippets count only in volume views. |
 | **n / enough_data** | `n` = postings in the denominator of the row's percentage. `enough_data = n >= 10`. Dashboards show a percentage only when `enough_data` is true; otherwise show the count or "not enough data". |
-| **Market** | `CR` (located in Costa Rica: on-site, hybrid or remote), `US-remote` (remote, open to US-based workers), `LATAM-remote` (remote, open to Latin America / the Americas / worldwide). |
+| **Market** | `CR` (located specifically in Costa Rica: on-site, hybrid, or remote restricted to Costa Rica), `US-remote` (remote, open to US-based workers), `LATAM-remote` (remote, open to candidates in Costa Rica, among other countries, including places outside Latin America). Known limit: a remote posting listing 2+ Latin American countries counts as `LATAM-remote` even if Costa Rica isn't one of them; the rule treats it as open to the region. |
+| **Available to CR** (`market = 'Available to CR'`, `is_rollup = TRUE`) | A grouping, not a fourth market: `CR` + `LATAM-remote`, each posting once, with its own percentages and `n`. **Dashboards must filter `is_rollup = FALSE` by default**, and select the grouping on purpose: its rows repeat postings already in `CR` and `LATAM-remote`, so summing across markets without the filter double-counts them. `v_postings` and `v_posting_skills` have no such rows, only an `available_to_cr` flag. |
 | **Role family** | `Data & Analytics` (Data Analyst, BI Analyst, Data Reporting, Analytics & Insights), `Marketing & Insights` (Marketing Analyst, incl. Marketing Science), `Business & Operations` (Business Operations Analyst, Business Analyst). See `v_roles`. |
 | **Weeks** | ISO weeks starting Monday, UTC. |
 
@@ -39,7 +40,8 @@ SELECT * FROM fn_skill_match(ARRAY['Excel', 'SQL', 'Power BI'], 'role_category')
 **Power BI** (import `v_skill_demand_segment` and `v_skills`; keep them **unrelated**: `v_skills`
 is a disconnected "My skills" slicer table):
 ```DAX
--- Page filter: v_skill_demand_segment[grain] = "role_category" (or "role_family")
+-- Page filter: v_skill_demand_segment[grain] = "role_category" (or "role_family"), and either
+-- is_rollup = FALSE or a single selected market (one market's rows never double-count)
 
 Match % =
 VAR mine   = VALUES ( v_skills[skill_name] )
@@ -56,6 +58,8 @@ IF ( ISFILTERED ( v_skills[skill_name] ),
 Enough Data = IF ( MIN ( v_skill_demand_segment[n] ) >= 10, "yes", "not enough data" )
 ```
 Put `segment` and `market` on rows of a matrix with `Match %`, and always filter `grain` to one value.
+`fn_skill_match` returns one row per segment and market: `market = 'Available to CR'` (`is_rollup = TRUE`)
+is the match against CR + LATAM-remote postings together. Read it on its own; don't add it to the others.
 
 **Data Studio:** no parameters for PostgreSQL custom queries, so use a fixed skill list in a
 custom query (`SELECT * FROM fn_skill_match(ARRAY['Excel','SQL'])`) or chart
@@ -75,8 +79,8 @@ custom query (`SELECT * FROM fn_skill_match(ARRAY['Excel','SQL'])`) or chart
 | [`v_skill_demand`](#v_skill_demand) | Tool demand per role/market/modality. Full-description postings only (Adzuna/Jooble snippets excluded). Window: postings seen in the last 90 days; *_open_now columns restrict to postings still listed. |
 | [`v_skill_demand_segment`](#v_skill_demand_segment) | Tool demand per segment = (role category or role family) x market, all modalities. Full-description postings seen in the last 90 days. Filter grain to one value: rows of the two grains overlap. |
 | [`v_skills`](#v_skills) | Every tool in the dictionary, including ones no posting mentions yet. Use as the "My skills" slicer table for the skill-match page. |
-| [`v_weekly_postings`](#v_weekly_postings) | Postings per ISO week (Monday start, UTC), market and role. All sources. A posting is "listed" in every week between its first_seen and last_seen. Additive across markets and roles. |
-| [`v_weekly_skill_trend`](#v_weekly_skill_trend) | Tool demand per ISO week, market and role family. Full-description postings listed during the week. postings_mentioning and n are additive across markets/families; percentages are not. |
+| [`v_weekly_postings`](#v_weekly_postings) | Postings per ISO week (Monday start, UTC), market and role. All sources. A posting is "listed" in every week between its first_seen and last_seen. Additive across markets and roles when is_rollup = FALSE. |
+| [`v_weekly_skill_trend`](#v_weekly_skill_trend) | Tool demand per ISO week, market and role family. Full-description postings listed during the week. postings_mentioning and n are additive across markets/families when is_rollup = FALSE; percentages are not. |
 
 ### v_last_updated
 
@@ -101,11 +105,12 @@ Work modality per market, all sources (incl. snippet sources). US-remote and LAT
 
 | Column | Type | Label / meaning |
 |---|---|---|
-| `market` | text | Label: "Market". |
+| `market` | text | Label: "Market". CR, US-remote, LATAM-remote, or the grouping Available to CR (see is_rollup). |
 | `modality` | text | Label: "Work modality". |
 | `postings_seen_90d` | bigint | Label: "Postings (last 90 days)". |
 | `pct_of_market_90d` | numeric | Label: "% of the market's postings (last 90 days)". |
 | `postings_open_now` | bigint | Label: "Open postings now". |
+| `is_rollup` | boolean | Label: "Is a grouping". TRUE on Available to CR rows, which repeat CR and LATAM-remote postings. Filter is_rollup = FALSE by default; summing across markets otherwise double-counts. |
 
 ### v_posting_counts
 
@@ -113,7 +118,7 @@ Headline counts per market and role. All sources; the *_full_text_* columns are 
 
 | Column | Type | Label / meaning |
 |---|---|---|
-| `market` | text | Label: "Market". CR, US-remote or LATAM-remote. |
+| `market` | text | Label: "Market". CR, US-remote, LATAM-remote, or the grouping Available to CR (see is_rollup). |
 | `role_category` | text | Label: "Role". |
 | `postings_seen_90d` | bigint | Label: "Postings seen in the last 90 days" (includes postings that have since closed). |
 | `postings_open_now` | bigint | Label: "Open postings now". postings_open_verified + postings_open_estimated. |
@@ -122,6 +127,7 @@ Headline counts per market and role. All sources; the *_full_text_* columns are 
 | `role_family` | text | Label: "Role family". |
 | `postings_open_verified` | bigint | Label: "Open now (verified)". Open postings from sources re-checked every run. |
 | `postings_open_estimated` | bigint | Label: "Open now (estimated)". TheirStack postings counted as open for 30 days after posted_at; not re-checked. |
+| `is_rollup` | boolean | Label: "Is a grouping". TRUE on Available to CR rows, which repeat CR and LATAM-remote postings. Filter is_rollup = FALSE by default; summing across markets otherwise double-counts. |
 
 ### v_posting_skills
 
@@ -143,6 +149,7 @@ Long format: one row per (posting, tool). Postings with no tools have no rows he
 | `first_seen` | timestamp with time zone | Label: "First seen by SkillMap". |
 | `last_seen` | timestamp with time zone | Label: "Last seen by SkillMap". |
 | `open_status` | text | Label: "Open status". verified = re-checked every run; estimated = open by rule (TheirStack, 30 days after posting); empty = closed. |
+| `available_to_cr` | boolean | Label: "Available to Costa Rica candidates". TRUE when market is CR or LATAM-remote. |
 
 ### v_postings
 
@@ -174,6 +181,7 @@ One row per loaded posting, for EDA. All sources, all time (filter seen_90d / op
 | `n_tools` | bigint | Label: "Tools mentioned". |
 | `url` | text | Label: "Posting link". Tracking parameters removed. |
 | `open_status` | text | Label: "Open status". verified = re-checked every run; estimated = open by rule (TheirStack, 30 days after posting); empty = closed. |
+| `available_to_cr` | boolean | Label: "Available to Costa Rica candidates". TRUE when market is CR or LATAM-remote. One row per posting, so counting it never double-counts. |
 
 ### v_roles
 
@@ -208,7 +216,7 @@ Tool demand per role/market/modality. Full-description postings only (Adzuna/Joo
 | Column | Type | Label / meaning |
 |---|---|---|
 | `role_category` | text | Label: "Role". |
-| `market` | text | Label: "Market". CR, US-remote or LATAM-remote. |
+| `market` | text | Label: "Market". CR, US-remote, LATAM-remote, or the grouping Available to CR (see is_rollup). |
 | `modality` | text | Label: "Work modality". remote, hybrid, onsite or unspecified. |
 | `skill_name` | text | Label: "Tool". |
 | `skill_category` | text | Label: "Tool category". |
@@ -220,6 +228,7 @@ Tool demand per role/market/modality. Full-description postings only (Adzuna/Joo
 | `role_family` | text | Label: "Role family". Group of related role categories (see v_roles). |
 | `n` | bigint | Label: "Sample size (postings)". Same as postings_total_90d: the denominator of pct_postings_90d. |
 | `enough_data` | boolean | Label: "Enough data". TRUE when n >= 10. Show percentages only when TRUE. |
+| `is_rollup` | boolean | Label: "Is a grouping". TRUE on Available to CR rows, which repeat CR and LATAM-remote postings. Filter is_rollup = FALSE by default; summing across markets otherwise double-counts. |
 
 ### v_skill_demand_segment
 
@@ -231,16 +240,17 @@ Tool demand per segment = (role category or role family) x market, all modalitie
 | `segment` | text | Label: "Role / role family". The role category (grain = role_category) or role family (grain = role_family). |
 | `role_family` | text | Label: "Role family". |
 | `role_category` | text | Label: "Role". NULL at grain = role_family. |
-| `market` | text | Label: "Market". |
+| `market` | text | Label: "Market". CR, US-remote, LATAM-remote, or the grouping Available to CR (see is_rollup). |
 | `skill_name` | text | Label: "Tool". |
 | `skill_category` | text | Label: "Tool category". |
-| `postings_mentioning_90d` | bigint | Label: "Postings mentioning the tool (last 90 days)". Additive across segments of one grain. |
+| `postings_mentioning_90d` | bigint | Label: "Postings mentioning the tool (last 90 days)". Additive across segments of one grain, with is_rollup = FALSE. |
 | `postings_total_90d` | bigint | Label: "Postings in segment (last 90 days)". Denominator of pct_postings_90d. |
 | `pct_postings_90d` | numeric | Label: "% of postings asking for the tool (last 90 days)". |
 | `mention_share_pct` | numeric | Label: "Share of all tool requests (%)". This tool's mentions / all tool mentions in the segment. Sums to ~100 per segment; the skill-match % is the sum of this over the tools you have. |
 | `demand_rank` | bigint | Label: "Rank in segment". 1 = most requested tool (ties share a rank). |
 | `n` | bigint | Label: "Sample size (postings)". Same as postings_total_90d. |
 | `enough_data` | boolean | Label: "Enough data". TRUE when n >= 10. |
+| `is_rollup` | boolean | Label: "Is a grouping". TRUE on Available to CR rows, which repeat CR and LATAM-remote postings. Filter is_rollup = FALSE by default; summing across markets otherwise double-counts. |
 
 ### v_skills
 
@@ -254,26 +264,27 @@ Every tool in the dictionary, including ones no posting mentions yet. Use as the
 
 ### v_weekly_postings
 
-Postings per ISO week (Monday start, UTC), market and role. All sources. A posting is "listed" in every week between its first_seen and last_seen. Additive across markets and roles.
+Postings per ISO week (Monday start, UTC), market and role. All sources. A posting is "listed" in every week between its first_seen and last_seen. Additive across markets and roles when is_rollup = FALSE.
 
 | Column | Type | Label / meaning |
 |---|---|---|
 | `week_start` | date | Label: "Week (starting Monday)". |
-| `market` | text | Label: "Market". |
+| `market` | text | Label: "Market". CR, US-remote, LATAM-remote, or the grouping Available to CR (see is_rollup). |
 | `role_family` | text | Label: "Role family". |
 | `role_category` | text | Label: "Role". |
 | `new_postings` | bigint | Label: "New postings". First seen during the week. |
 | `postings_listed` | bigint | Label: "Postings listed". Listed at any point during the week. |
 | `postings_listed_full_text` | bigint | Label: "Postings listed (full description)". Subset used for tool trends. |
+| `is_rollup` | boolean | Label: "Is a grouping". TRUE on Available to CR rows, which repeat CR and LATAM-remote postings. Filter is_rollup = FALSE by default; summing across markets otherwise double-counts. |
 
 ### v_weekly_skill_trend
 
-Tool demand per ISO week, market and role family. Full-description postings listed during the week. postings_mentioning and n are additive across markets/families; percentages are not.
+Tool demand per ISO week, market and role family. Full-description postings listed during the week. postings_mentioning and n are additive across markets/families when is_rollup = FALSE; percentages are not.
 
 | Column | Type | Label / meaning |
 |---|---|---|
 | `week_start` | date | Label: "Week (starting Monday)". |
-| `market` | text | Label: "Market". |
+| `market` | text | Label: "Market". CR, US-remote, LATAM-remote, or the grouping Available to CR (see is_rollup). |
 | `role_family` | text | Label: "Role family". |
 | `skill_name` | text | Label: "Tool". |
 | `skill_category` | text | Label: "Tool category". |
@@ -283,9 +294,10 @@ Tool demand per ISO week, market and role family. Full-description postings list
 | `rank_in_week` | bigint | Label: "Rank that week". 1 = most requested. |
 | `n` | bigint | Label: "Sample size (postings)". Same as postings_listed_full_text. |
 | `enough_data` | boolean | Label: "Enough data". TRUE when n >= 10. |
+| `is_rollup` | boolean | Label: "Is a grouping". TRUE on Available to CR rows, which repeat CR and LATAM-remote postings. Filter is_rollup = FALSE by default; summing across markets otherwise double-counts. |
 
 ## Functions
 
-`fn_skill_match(my_skills text[], match_grain text DEFAULT 'role_category'::text)` returns `TABLE(grain text, segment text, role_family text, market text, n bigint, enough_data boolean, match_pct numeric, skills_matched text[], top_missing_skills text[])`.
+`fn_skill_match(my_skills text[], match_grain text DEFAULT 'role_category'::text)` returns `TABLE(grain text, segment text, role_family text, market text, n bigint, enough_data boolean, match_pct numeric, skills_matched text[], top_missing_skills text[], is_rollup boolean)`.
 
-Skill match per segment and market. match_pct = share of tool requests in the segment's full-description postings (last 90 days) covered by my_skills (case-insensitive tool names). top_missing_skills = the 5 most-requested tools you do not have. match_grain: role_category (default) or role_family.
+Skill match per segment and market. match_pct = share of tool requests in the segment's full-description postings (last 90 days) covered by my_skills (case-insensitive tool names). top_missing_skills = the 5 most-requested tools you do not have. match_grain: role_category (default) or role_family. Rows with is_rollup = TRUE are the "Available to CR" market (CR + LATAM-remote, each posting once): one row per market, so read them on their own and never add them to the others.

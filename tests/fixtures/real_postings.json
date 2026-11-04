@@ -408,8 +408,8 @@
    "board": "bluelightconsulting",
    "why": "CR copy of a per-country posting",
    "expected": [
-    "CR",
-    "cr_location"
+    "LATAM-remote",
+    "cr_and_other_locations"
    ],
    "job": {
     "id": "1453791f-3434-431f-983a-bba4f1317f4c",
@@ -626,8 +626,8 @@
    "board": "sysdig",
    "why": "secondary location Costa Rica",
    "expected": [
-    "CR",
-    "cr_location"
+    "LATAM-remote",
+    "cr_and_other_locations"
    ],
    "job": {
     "id": "af7fe5ab-9d5a-453c-8d6b-45772713246c",

@@ -18,7 +18,8 @@
       "modality",
       "postings_seen_90d",
       "pct_of_market_90d",
-      "postings_open_now"
+      "postings_open_now",
+      "is_rollup"
     ],
     "v_posting_counts": [
       "market",
@@ -29,7 +30,8 @@
       "postings_full_text_open_now",
       "role_family",
       "postings_open_verified",
-      "postings_open_estimated"
+      "postings_open_estimated",
+      "is_rollup"
     ],
     "v_posting_skills": [
       "job_id",
@@ -45,7 +47,8 @@
       "seen_90d",
       "first_seen",
       "last_seen",
-      "open_status"
+      "open_status",
+      "available_to_cr"
     ],
     "v_postings": [
       "job_id",
@@ -71,7 +74,8 @@
       "description_length",
       "n_tools",
       "url",
-      "open_status"
+      "open_status",
+      "available_to_cr"
     ],
     "v_roles": [
       "role_family",
@@ -102,7 +106,8 @@
       "postings_total_open_now",
       "role_family",
       "n",
-      "enough_data"
+      "enough_data",
+      "is_rollup"
     ],
     "v_skill_demand_segment": [
       "grain",
@@ -118,7 +123,8 @@
       "mention_share_pct",
       "demand_rank",
       "n",
-      "enough_data"
+      "enough_data",
+      "is_rollup"
     ],
     "v_skills": [
       "skill_name",
@@ -132,7 +138,8 @@
       "role_category",
       "new_postings",
       "postings_listed",
-      "postings_listed_full_text"
+      "postings_listed_full_text",
+      "is_rollup"
     ],
     "v_weekly_skill_trend": [
       "week_start",
@@ -145,7 +152,8 @@
       "pct_postings",
       "rank_in_week",
       "n",
-      "enough_data"
+      "enough_data",
+      "is_rollup"
     ]
   }
 }

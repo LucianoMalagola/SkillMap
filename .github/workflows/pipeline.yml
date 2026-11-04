@@ -29,9 +29,12 @@ on:
         description: "Skip TheirStack (saves credits; 200/month shared by every run)"
         type: boolean
         default: false
-  # Daily run, always against main.
+  # Daily run, always against main. GitHub can delay or drop scheduled runs, so there's a backup.
+  # Both pass --skip-if-ran-today, and the concurrency group below makes them wait for each other:
+  # whichever starts second does nothing if the first succeeded, and retries if it failed.
   schedule:
     - cron: "17 11 * * *"     # 11:17 UTC = 05:17 Costa Rica (off the hour: GitHub delays :00 jobs)
+    - cron: "43 17 * * *"     # backup: 17:43 UTC = 11:43 Costa Rica
 
 permissions:
   contents: read
@@ -68,6 +71,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           args="--target $TARGET --migrate"
+          if [ "${{ github.event_name }}" = "schedule" ]; then args="$args --skip-if-ran-today"; fi
           if [ "${{ inputs.migrate_only }}" = "true" ]; then args="$args --migrate-only"; fi
           if [ "${{ inputs.include_jooble }}" != "true" ]; then args="$args --skip-jooble"; fi
           if [ "${{ inputs.skip_theirstack }}" = "true" ]; then args="$args --skip theirstack"; fi

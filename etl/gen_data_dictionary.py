@@ -49,7 +49,8 @@ Edit labels in a migration (`COMMENT ON ...`), not here. The text before "## Vie
 | **Open now** (`*_open_now`, `open_now`) | Still listed as of the latest pipeline run (`jobs.is_active`). |
 | **Full description** | `description_is_full = TRUE`: ATS boards and Remotive. Tool views count only these, in numerator **and** denominator. Adzuna/Jooble snippets count only in volume views. |
 | **n / enough_data** | `n` = postings in the denominator of the row's percentage. `enough_data = n >= 10`. Dashboards show a percentage only when `enough_data` is true; otherwise show the count or "not enough data". |
-| **Market** | `CR` (located in Costa Rica: on-site, hybrid or remote), `US-remote` (remote, open to US-based workers), `LATAM-remote` (remote, open to Latin America / the Americas / worldwide). |
+| **Market** | `CR` (located specifically in Costa Rica: on-site, hybrid, or remote restricted to Costa Rica), `US-remote` (remote, open to US-based workers), `LATAM-remote` (remote, open to candidates in Costa Rica, among other countries, including places outside Latin America). Known limit: a remote posting listing 2+ Latin American countries counts as `LATAM-remote` even if Costa Rica isn't one of them; the rule treats it as open to the region. |
+| **Available to CR** (`market = 'Available to CR'`, `is_rollup = TRUE`) | A grouping, not a fourth market: `CR` + `LATAM-remote`, each posting once, with its own percentages and `n`. **Dashboards must filter `is_rollup = FALSE` by default**, and select the grouping on purpose: its rows repeat postings already in `CR` and `LATAM-remote`, so summing across markets without the filter double-counts them. `v_postings` and `v_posting_skills` have no such rows, only an `available_to_cr` flag. |
 | **Role family** | `Data & Analytics` (Data Analyst, BI Analyst, Data Reporting, Analytics & Insights), `Marketing & Insights` (Marketing Analyst, incl. Marketing Science), `Business & Operations` (Business Operations Analyst, Business Analyst). See `v_roles`. |
 | **Weeks** | ISO weeks starting Monday, UTC. |
 
@@ -71,7 +72,8 @@ SELECT * FROM fn_skill_match(ARRAY['Excel', 'SQL', 'Power BI'], 'role_category')
 **Power BI** (import `v_skill_demand_segment` and `v_skills`; keep them **unrelated**: `v_skills`
 is a disconnected "My skills" slicer table):
 ```DAX
--- Page filter: v_skill_demand_segment[grain] = "role_category" (or "role_family")
+-- Page filter: v_skill_demand_segment[grain] = "role_category" (or "role_family"), and either
+-- is_rollup = FALSE or a single selected market (one market's rows never double-count)
 
 Match % =
 VAR mine   = VALUES ( v_skills[skill_name] )
@@ -88,6 +90,8 @@ IF ( ISFILTERED ( v_skills[skill_name] ),
 Enough Data = IF ( MIN ( v_skill_demand_segment[n] ) >= 10, "yes", "not enough data" )
 ```
 Put `segment` and `market` on rows of a matrix with `Match %`, and always filter `grain` to one value.
+`fn_skill_match` returns one row per segment and market: `market = 'Available to CR'` (`is_rollup = TRUE`)
+is the match against CR + LATAM-remote postings together. Read it on its own; don't add it to the others.
 
 **Data Studio:** no parameters for PostgreSQL custom queries, so use a fixed skill list in a
 custom query (`SELECT * FROM fn_skill_match(ARRAY['Excel','SQL'])`) or chart

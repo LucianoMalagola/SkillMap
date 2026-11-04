@@ -321,8 +321,8 @@ def test_transform_counts_copies_once():
     copies = [("Power Digital", _pd_copy(i, c)) for i, c in enumerate(["Colombia", "Mexico", "Ecuador"], 1)]
     copies.append(("Power Digital", _pd_copy(9, "Costa Rica")))
     rows, excluded = t.transform("greenhouse", copies, EXTRACTOR)
-    assert len(rows) == 1 and rows[0]["market"] == "CR" and rows[0]["copies"] == 4
-    assert rows[0]["external_id"] == "9"                       # the copy located in the winning market
+    assert len(rows) == 1 and rows[0]["market"] == "LATAM-remote" and rows[0]["copies"] == 4
+    assert rows[0]["external_id"] == "1"                       # no copy is more specific: smallest id
     assert "Remote - Colombia" in rows[0]["location_raw"] and "Remote - Costa Rica" in rows[0]["location_raw"]
     assert excluded == {"duplicate": 3}
 

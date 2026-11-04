@@ -33,12 +33,17 @@ REAL_CR = [
     ("Costa Rica - Remote", {"workplace_type": "remote", "country_code": "CR"}, CR, "cr_location"),  # BlueCat
     # CR wins even when the posting's main country is elsewhere
     ("Toronto Office | Costa Rica - Remote", {"workplace_type": "hybrid", "country_code": "CA"}, CR, "cr_location"),
-    ("Flexible, Spain | Flexible - Costa Rica", {"workplace_type": "remote", "country_code": "ES"}, CR, "cr_location"),
+    # remote, open to Costa Rica plus anywhere else: LATAM-remote, even outside LATAM (decided 2026-11-04)
+    ("Flexible, Spain | Flexible - Costa Rica", {"workplace_type": "remote", "country_code": "ES"},
+     LATAM_REMOTE, "cr_and_other_locations"),
     ("Alajuela, Costa Rica (remote); Cartago, Costa Rica (remote); Heredia, Costa Rica (remote)", {}, CR, "cr_location"),
     ("Remote - Colombia | Remote - Buenos Aires | Remote - Mexico | Remote - Costa Rica",
-     {"workplace_type": "Remote", "is_remote": True}, CR, "cr_location"),                            # Owner
+     {"workplace_type": "Remote", "is_remote": True}, LATAM_REMOTE, "cr_and_other_locations"),       # Owner
     (" Costa Rica | Guatemala | Chile | Ecuador | Mexico | Argentina | Honduras | Ethiopia",
-     {"workplace_type": "Remote", "is_remote": True}, CR, "cr_location"),                            # Scale Army
+     {"workplace_type": "Remote", "is_remote": True}, LATAM_REMOTE, "cr_and_other_locations"),       # Scale Army
+    # real postings that moved from CR on 2026-11-04 (hybrid MSD stays: the job is at the CR office)
+    ("Chile | Costa Rica | Colombia | Argentina", {"workplace_type": "remote"}, LATAM_REMOTE, "cr_and_other_locations"),
+    ("Costa Rica | Czech Republic", {"workplace_type": "hybrid"}, CR, "cr_location"),
 ]
 
 REAL_US_REMOTE = [
@@ -247,11 +252,12 @@ def test_text_region_survives_structured_country():
 
 
 def test_lever_country_applies_to_primary_location_only():
-    # Sysdig: country ES belongs to "Flexible, Spain"; the secondary Costa Rica location still counts
+    # Sysdig: country ES belongs to "Flexible, Spain"; the secondary Costa Rica location still counts,
+    # and remote in Costa Rica plus another country is LATAM-remote
     job = {"text": "SRE", "categories": {"location": "Flexible, Spain",
                                          "allLocations": ["Flexible, Spain", "Flexible - Costa Rica"]},
            "country": "ES", "workplaceType": "remote", "descriptionPlain": ""}
-    assert classify_posting("lever", job) == (CR, "cr_location")
+    assert classify_posting("lever", job) == (LATAM_REMOTE, "cr_and_other_locations")
 
 
 def test_greenhouse_location_beats_office():

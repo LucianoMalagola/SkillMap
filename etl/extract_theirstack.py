@@ -18,11 +18,12 @@ results per search; 10 requests a minute. Hard caps, enforced before every reque
   * per run: --max-credits (run_pipeline passes a small cap for dev, a larger one for main).
   * per query: QUERY_MAX_CREDITS, so a broad query can't use up what the others need.
 Reaching a cap is NOT an error: it is logged, recorded in the manifest, and the run goes on
-(exit 0). Nothing is lost: results come oldest first, and each query's cursor (manifest
-"cursors", stored in etl_runs.source_cursor once loaded) only moves as far as what was fetched:
-  * query finished          -> this run's start, minus an hour of overlap
-  * stopped early           -> discovered_at of the last posting fetched
-  * stopped, nothing fetched -> unchanged (no cursor yet = backfill next time)
+(exit 0). Nothing is lost and nothing is bought twice, whatever order results come in (the default
+is date_posted, and order_by is deprecated). Per query (manifest "cursors", stored in
+etl_runs.source_cursor once loaded):
+  * query finished -> cursor = this run's start, minus an hour of overlap; no IDs kept
+  * stopped early  -> cursor unchanged (no cursor yet = backfill next time), and the IDs fetched go in
+                      cursors["seen_ids"], so the next run asks for the rest with job_id_not
 
 Incremental: --since asks only for postings TheirStack discovered at/after a timestamp, one for
 all queries or per query (run_pipeline passes the stored cursors). Without it: the last 90 days.
@@ -31,6 +32,7 @@ Usage:
     python etl/extract_theirstack.py --max-credits 15
     python etl/extract_theirstack.py --since 2026-11-02T10:00:00Z --max-credits 150
     python etl/extract_theirstack.py --since cr=2026-11-02T10:00:00Z latam_remote=2026-11-01T08:00:00Z
+    python etl/extract_theirstack.py --since cr=2026-11-02T10:00:00Z --seen-ids cr=855537299,829454095
     python etl/extract_theirstack.py --plan          # show the balance and the cap, spend nothing
 """
 
@@ -83,18 +85,19 @@ QUERIES = {
 }
 
 
-def build_body(query: str, page: int, limit: int, since: str | None) -> dict:
+def build_body(query: str, page: int, limit: int, since: str | None, seen_ids: list[int] | None = None) -> dict:
     body = {
         **QUERIES[query],
         "job_title_pattern_or": TITLE_PATTERNS,
         "posted_at_max_age_days": LOOKBACK_DAYS,
         "property_exists_or": ["final_url"],           # employer career site / ATS page only
-        "order_by": [{"field": "discovered_at", "desc": False}],   # oldest first: the cursor depends on it
         "page": page,
         "limit": limit,
     }
     if since:
         body["discovered_at_gte"] = since
+    if seen_ids:
+        body["job_id_not"] = seen_ids
     return body
 
 
@@ -107,17 +110,14 @@ def parse_since(values: list[str] | None, queries: list[str]) -> dict[str, str]:
     return since
 
 
-def discovered_times(jobs: list[dict]) -> list[datetime]:
-    return [datetime.fromisoformat(j["discovered_at"]) for j in jobs if j.get("discovered_at")]
+def parse_seen_ids(values: list[str] | None) -> dict[str, list[int]]:
+    """--seen-ids cr=1,2 latam_remote=3 -> {query: [ids]}."""
+    return {query: [int(i) for i in ids.split(",")] for query, _, ids in (v.partition("=") for v in values or [])}
 
 
-def next_cursor(finished: bool, discovered: list[datetime], started: datetime, since: str | None) -> str | None:
-    """Where the next run starts for one query (see the module docstring).
-    shortcut: truncated to the second and inclusive, so a stopped query re-buys its last posting (1 credit);
-    more postings in one second than a run can fetch would never advance. Not seen; use `cursor` paging if it is."""
-    if finished:
-        return (started - CURSOR_OVERLAP).strftime(TIME_FORMAT)
-    return discovered[-1].strftime(TIME_FORMAT) if discovered else since
+def next_cursor(finished: bool, started: datetime, since: str | None) -> str | None:
+    """Where the next run starts for one query (see the module docstring)."""
+    return (started - CURSOR_OVERLAP).strftime(TIME_FORMAT) if finished else since
 
 
 def credits_allowed(balance: dict, max_credits: int, reserve: int = RESERVE_CREDITS) -> int:
@@ -154,11 +154,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Extract TheirStack postings (CR + LATAM-remote)")
     parser.add_argument("--since", nargs="+", metavar="[QUERY=]TIMESTAMP",
                         help="only postings discovered at/after this ISO timestamp (default: 90-day backfill)")
+    parser.add_argument("--seen-ids", nargs="+", metavar="QUERY=ID,ID",
+                        help="postings already fetched since the cursor: not requested (or paid for) again")
     parser.add_argument("--max-credits", type=int, default=DEFAULT_MAX_CREDITS, help="per-run credit cap")
     parser.add_argument("--queries", nargs="+", choices=list(QUERIES), default=list(QUERIES))
     parser.add_argument("--plan", action="store_true", help="show balance and cap only; spend nothing")
     args = parser.parse_args(argv)
     since = parse_since(args.since, args.queries)
+    seen_before = parse_seen_ids(args.seen_ids)
 
     env_path = ROOT / ".env"
     if env_path.exists():
@@ -189,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest = {"source": "theirstack", "date": out_dir.name, "since": since, "max_credits": args.max_credits,
                 "credits_allowed": allowed, "balance_before": before, "capped": False, "queries": [], "cursors": {}}
+    seen_after: dict[str, list[int]] = {}
 
     spent, requests_made, errors = 0, 0, 0
     if allowed == 0:
@@ -197,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
               "Skipping TheirStack today; this is not an error.")
     for query in args.queries:
         started = datetime.now(timezone.utc)
-        discovered: list[datetime] = []
+        seen = list(seen_before.get(query, []))
         entry = {"query": query, "status": "ok", "files": [], "n_jobs": 0,
                  "fetched_at": started.isoformat(timespec="seconds")}
         manifest["queries"].append(entry)
@@ -214,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
                 time.sleep(REQUEST_DELAY)
             requests_made += 1
             try:
-                response = post_search(session, build_body(query, page, limit, since.get(query)))
+                response = post_search(session, build_body(query, page, limit, since.get(query), seen_before.get(query)))
                 response.raise_for_status()
                 jobs = response.json()["data"]
             except (requests.RequestException, ValueError, KeyError) as err:
@@ -227,10 +231,17 @@ def main(argv: list[str] | None = None) -> int:
             out_file = out_dir / f"{query}_p{page}.json"
             out_file.write_text(text, encoding="utf-8")
             spent += len(jobs)
-            discovered += discovered_times(jobs)
+            ids = [j["id"] for j in jobs if j.get("id") is not None]
+            repeated = set(ids) & set(seen_before.get(query, []))
+            seen += [i for i in ids if i not in seen]
             entry["files"].append(out_file.name)
             entry["n_jobs"] += len(jobs)
             print(f"[{query}] page {page}: {len(jobs)} jobs -> {out_file.name}")
+            if repeated:     # job_id_not ignored: every run would re-buy the same postings. Stop and say so.
+                entry.update(status="error", error=f"{len(repeated)} postings returned despite job_id_not")
+                errors += 1
+                print(f"[{query}] ERROR: {entry['error']}")
+                break
             if len(jobs) < limit:
                 break
         else:
@@ -239,13 +250,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{query}] {entry['note']}")
 
         finished = entry["status"] == "ok"
-        if not finished and discovered != sorted(discovered):
-            # The cursor assumes oldest-first. If TheirStack ignores the (deprecated) order_by, keep it put.
-            entry.update(status="error", error="results not oldest-first; cursor not moved")
-            errors += 1
-            print(f"[{query}] ERROR: {entry['error']}")
-            discovered = []
-        manifest["cursors"][query] = next_cursor(finished, discovered, started, since.get(query))
+        manifest["cursors"][query] = next_cursor(finished, started, since.get(query))
+        if not finished and seen:
+            seen_after[query] = seen
+
+    if seen_after:
+        manifest["cursors"]["seen_ids"] = seen_after
 
     try:
         after = get_balance(session)

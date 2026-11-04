@@ -56,7 +56,10 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   10 `jobs.open_status` (generated: 'verified' = re-checked every run, 'estimated' = TheirStack, NULL = closed),
   exposed in `v_postings`, `v_posting_skills`, and as `postings_open_verified` / `_estimated` in `v_posting_counts`.
   11 `etl_runs.source_cursor` (TheirStack: where the next run starts, per query).
-  Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`, `role_families`, `schema_migrations`.
+  12 market rule: 7 TheirStack postings moved CR -> LATAM-remote; `market_groups` + `market = 'Available to CR'` rows and
+  `is_rollup` on market-grouped views and `fn_skill_match`; `available_to_cr` on `v_postings` / `v_posting_skills`.
+  13 `pipeline_runs` (complete successful runs; read by `--skip-if-ran-today`).
+  Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`, `role_families`, `schema_migrations`, `pipeline_runs`.
   Views: `v_skill_demand`, `v_skill_demand_segment`, `v_skill_cooccurrence`, `v_modality_mix`,
   `v_posting_counts`, `v_weekly_postings`, `v_weekly_skill_trend`, `v_last_updated`, `v_postings`,
   `v_posting_skills`, `v_roles`, `v_skills`; function `fn_skill_match(text[], grain)`.
@@ -105,10 +108,11 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   `api_credits - 10`; per-run cap `run_pipeline.THEIRSTACK_MAX_CREDITS` (dev 15, main 150). Cap reached = logged,
   not a failure; `QUERY_MAX_CREDITS` limits `latam_remote` to 3 per run, because the reach of its region filter
   (`job_location_or` id 99000012 = LATAM in the free `/v0/catalog/locations`; IDs, not text) is unmeasured.
-  Incremental, per query, nothing lost when stopped: results come oldest first (`order_by` discovered_at; deprecated
-  with no documented replacement, so a stopped query that gets them out of order fails loudly and keeps its cursor).
-  `etl_runs.source_cursor`: finished = run start - 1 h; stopped = last posting fetched; nothing fetched = unchanged
-  (no cursor yet = 90-day backfill). Stored only after a successful load of a run that extracted.
+  Incremental, per query, nothing lost or bought twice when stopped, in any result order (first live run 2026-11-04:
+  `order_by` discovered_at ascending was NOT honoured, so it's gone; the default is date_posted descending).
+  `etl_runs.source_cursor`: finished = run start - 1 h; stopped = unchanged (no cursor yet = 90-day backfill), and IDs
+  bought so far in `seen_ids`, sent next run as `job_id_not` (documented; a run fails loudly if it returns one anyway).
+  Stored only after a successful load of a run that extracted.
   Each posting is fetched once: `first_seen` = TheirStack `discovered_at`; `closed_at` -> inactive.
   TheirStack lists one posting once per site (HPE req 1209477: 3 Workday sites + careers.hpe.com, 4 company
   spellings): `transform_load.merge_listing_copies` merges same title + same text or same 6+ digit requisition
@@ -148,10 +152,12 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   which replaces any `.env` key value with `[REDACTED:<NAME>]` (Adzuna echoes the app_id in every
   `redirect_url`). Raw files become public GitHub Actions artifacts, so they must never hold a key.
 - **Transform classifies each posting's location into a market** (`etl/location.py`):
-  - `'CR'`: located in Costa Rica (on-site, hybrid or remote).
+  - `'CR'`: located specifically in Costa Rica: on-site, hybrid, or remote restricted to Costa Rica
+    (decided by Luciano 2026-11-04). Hybrid "Costa Rica | Czech Republic" is CR: the job is at the CR office.
   - `'US-remote'`: remote postings open to US-based workers.
-  - `'LATAM-remote'`: remote postings open to Latin America / Americas / Costa Rica
-    (very relevant: Luciano is job hunting from Costa Rica).
+  - `'LATAM-remote'`: remote, open to candidates in Costa Rica among other countries, including Costa Rica plus
+    places outside LATAM and global listings (very relevant: Luciano is job hunting from Costa Rica).
+    Known gap: 2+ LATAM countries without Costa Rica also land here (see Status rules).
   - out of scope: everything else (on-site/hybrid outside CR, remote restricted to other countries).
   - One market per posting. If several apply, precedence is **CR > LATAM-remote > US-remote**
     (most specific location first, then "can someone in Costa Rica apply?").
@@ -189,7 +195,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       `classify_location(...)` for plain fields. EN/ES. Structured fields preferred: Lever
       `workplaceType` + `country` (primary location only), Ashby `workplaceType` (over `isRemote`) +
       `addressCountry` per location; regions in the text are still added, explicit "Costa Rica"
-      always counts. Greenhouse `offices` is often an HQ, so it's used only for bare "Remote"
+      always counts (a remote Costa Rica location alongside others: LATAM-remote). Greenhouse `offices` is often an HQ, so it's used only for bare "Remote"
       after the title and before the description. `tests/test_location.py` (138 cases: real
       strings + 38 real postings in `tests/fixtures/real_postings.json`); run
       `python -m pytest tests/` (dev deps: `requirements-dev.txt`). Known limit: free-text
@@ -266,7 +272,8 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       `THEIRSTACK_API_KEY`; only the target's URL is passed; raw artifact 5 days) + `tests.yml` (ruff + pytest
       on push). Repo is public: artifacts are public (keys redacted by extractors and `redact.scrub_tree`), and
       GitHub disables scheduled workflows after 60 days without repo activity.
-- [x] **Main is live; the daily schedule is on** (since 2026-11-03: 11:17 UTC = 05:17 Costa Rica).
+- [x] **Main is live; the daily schedule is on** (since 2026-11-03: 11:17 UTC = 05:17 Costa Rica, backup 17:43 UTC,
+      both `--skip-if-ran-today`). GitHub started the first scheduled run 7 h late (2026-11-04, 18:40 UTC).
       First main run (2026-11-03): 176 postings (117 CR, 55 US-remote, 4 LATAM-remote), 12/12 checks;
       TheirStack backfill 121 credits (CR complete: 120 of 120).
 - [x] Open status (decided by Luciano 2026-11-03). Sources re-checked every run: 14-day stale rule,

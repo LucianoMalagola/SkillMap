@@ -340,9 +340,9 @@ def test_incremental_source_exempt_from_empty_and_drop_checks():
 
 # ---- cursor: a run stopped by a cap never loses postings ----------------------------------------
 
-def fake_api(monkeypatch, tmp_path, postings, balance=None):
-    """A TheirStack that honours discovered_at_gte, limit, page and ascending order.
-    postings: {query: [iso timestamp, ...]}. Returns the request bodies, for assertions."""
+def fake_api(monkeypatch, tmp_path, postings, balance=None, honour_job_id_not=True):
+    """A TheirStack with its real default order (newest first) that honours discovered_at_gte, job_id_not,
+    limit and page. postings: {query: [iso timestamp, ...]}, ids are 1, 2, ... Returns the request bodies."""
     bodies = []
 
     class Response:
@@ -367,10 +367,12 @@ def fake_api(monkeypatch, tmp_path, postings, balance=None):
         def post(self, url, json, timeout):
             bodies.append(json)
             found = postings["latam_remote" if "job_location_or" in json else "cr"]
-            found = sorted(t for t in found if not json.get("discovered_at_gte")
-                           or datetime.fromisoformat(t) >= datetime.fromisoformat(json["discovered_at_gte"]))
-            page = found[json["page"] * 25:][:json["limit"]]
-            return Response({"data": [{"id": t, "discovered_at": t} for t in page]})
+            since = json.get("discovered_at_gte")
+            excluded = json.get("job_id_not", []) if honour_job_id_not else []
+            jobs = [{"id": i, "discovered_at": t} for i, t in enumerate(found, 1)
+                    if i not in excluded and (not since or datetime.fromisoformat(t) >= datetime.fromisoformat(since))]
+            jobs.reverse()
+            return Response({"data": jobs[json["page"] * 25:][:json["limit"]]})
 
     monkeypatch.setenv("THEIRSTACK_API_KEY", "x" * 20)
     monkeypatch.setattr(ts.requests, "Session", Session)
@@ -387,35 +389,43 @@ def stamps(n):
     return [f"2026-11-05T{h:02d}:00:00Z" for h in range(n)]
 
 
-def test_capped_run_then_next_run_fetches_every_posting(monkeypatch, tmp_path):
-    cr = stamps(6)
-    bodies = fake_api(monkeypatch, tmp_path, {"cr": cr, "latam_remote": []})
-    assert ts.main(["--max-credits", "4", "--queries", "cr", "--since", "2026-11-04T00:00:00Z"]) == 0
-    first = manifest_of(tmp_path)
-    assert first["queries"][0]["status"] == "capped" and first["queries"][0]["n_jobs"] == 4
-    assert first["cursors"]["cr"] == cr[3]              # the last posting fetched, not the date of the run
+SINCE = "2026-11-04T00:00:00Z"
 
-    del bodies[:]
-    assert ts.main(["--max-credits", "50", "--queries", "cr", "--since", f"cr={first['cursors']['cr']}"]) == 0
+
+def test_capped_runs_fetch_every_posting_exactly_once(monkeypatch, tmp_path):
+    bodies = fake_api(monkeypatch, tmp_path, {"cr": stamps(6), "latam_remote": []})
+    assert ts.main(["--max-credits", "2", "--queries", "cr", "--since", SINCE]) == 0
+    first = manifest_of(tmp_path)
+    assert first["queries"][0]["status"] == "capped" and first["queries"][0]["n_jobs"] == 2
+    assert first["cursors"]["cr"] == SINCE and first["cursors"]["seen_ids"]["cr"] == [6, 5]
+
+    # still capped: the IDs add up
+    assert ts.main(["--max-credits", "2", "--queries", "cr", "--since", f"cr={SINCE}", "--seen-ids", "cr=6,5"]) == 0
     second = manifest_of(tmp_path)
-    assert bodies[0]["discovered_at_gte"] == cr[3]
-    assert second["queries"][0]["status"] == "ok" and second["queries"][0]["n_jobs"] == 3   # cr[3] again, cr[4], cr[5]
-    assert second["cursors"]["cr"] != cr[5]             # finished: moves to this run's start (minus overlap)
+    assert bodies[-1]["job_id_not"] == [6, 5] and second["cursors"]["seen_ids"]["cr"] == [6, 5, 4, 3]
+
+    # credits back: only the rest is bought, then the cursor moves on
+    assert ts.main(["--queries", "cr", "--since", f"cr={SINCE}", "--seen-ids", "cr=6,5,4,3"]) == 0
+    third = manifest_of(tmp_path)
+    assert third["queries"][0]["status"] == "ok" and third["queries"][0]["n_jobs"] == 2
+    assert third["cursors"]["cr"] != SINCE and "seen_ids" not in third["cursors"]
 
 
 def test_cap_reached_in_the_first_query_leaves_the_second_cursor_alone(monkeypatch, tmp_path):
     fake_api(monkeypatch, tmp_path, {"cr": stamps(5), "latam_remote": stamps(2)})
-    since = ["cr=2026-11-04T00:00:00Z", "latam_remote=2026-11-01T00:00:00Z"]
+    since = [f"cr={SINCE}", "latam_remote=2026-11-01T00:00:00Z"]
     assert ts.main(["--max-credits", "5", "--since", *since]) == 0
-    assert manifest_of(tmp_path)["cursors"]["latam_remote"] == "2026-11-01T00:00:00Z"
+    manifest = manifest_of(tmp_path)
+    assert manifest["cursors"]["latam_remote"] == "2026-11-01T00:00:00Z"
+    assert "latam_remote" not in manifest["cursors"]["seen_ids"]
 
 
 def test_no_credits_at_all_moves_nothing(monkeypatch, tmp_path):
     bodies = fake_api(monkeypatch, tmp_path, {"cr": stamps(3), "latam_remote": []},
                       balance={"api_credits": 200, "used_api_credits": 195})
-    assert ts.main(["--since", "2026-11-04T00:00:00Z"]) == 0
+    assert ts.main(["--since", SINCE]) == 0
     assert bodies == []
-    assert set(manifest_of(tmp_path)["cursors"].values()) == {"2026-11-04T00:00:00Z"}
+    assert manifest_of(tmp_path)["cursors"] == {"cr": SINCE, "latam_remote": SINCE}
 
 
 def test_first_run_stopped_before_fetching_stays_a_backfill(monkeypatch, tmp_path):
@@ -425,45 +435,34 @@ def test_first_run_stopped_before_fetching_stays_a_backfill(monkeypatch, tmp_pat
     assert set(manifest_of(tmp_path)["cursors"].values()) == {None}
 
 
-def test_free_plan_page_limit_continues_from_the_cursor(monkeypatch, tmp_path):
+def test_free_plan_page_limit_keeps_the_ids_fetched(monkeypatch, tmp_path):
     many = [f"2026-11-05T{h:02d}:{m:02d}:00Z" for h in range(4) for m in range(60)][:130]
     fake_api(monkeypatch, tmp_path, {"cr": many, "latam_remote": []})
     assert ts.main(["--queries", "cr"]) == 0
     manifest = manifest_of(tmp_path)
     assert manifest["queries"][0]["status"] == "page_limit"
-    assert manifest["cursors"]["cr"] == many[124]
+    assert manifest["cursors"]["cr"] is None and len(manifest["cursors"]["seen_ids"]["cr"]) == 125
 
 
 def test_latam_query_has_its_own_cap_and_keeps_its_place(monkeypatch, tmp_path):
-    latam = stamps(5)
-    fake_api(monkeypatch, tmp_path, {"cr": [], "latam_remote": latam})
-    assert ts.main(["--since", "2026-11-04T00:00:00Z"]) == 0
+    fake_api(monkeypatch, tmp_path, {"cr": [], "latam_remote": stamps(5)})
+    assert ts.main(["--since", SINCE]) == 0
     manifest = manifest_of(tmp_path)
     assert manifest["queries"][1]["n_jobs"] == ts.QUERY_MAX_CREDITS["latam_remote"]
-    assert manifest["cursors"]["latam_remote"] == latam[2]
+    assert manifest["cursors"]["latam_remote"] == SINCE and manifest["cursors"]["seen_ids"]["latam_remote"] == [5, 4, 3]
 
 
-def test_cursor_stays_put_if_results_are_not_oldest_first(monkeypatch, tmp_path):
-    """order_by is deprecated: if TheirStack stops honouring it, a stopped run must not skip anything."""
-    fake_api(monkeypatch, tmp_path, {"cr": [], "latam_remote": []})
-    newest_first = ["2026-11-05T09:00:00Z", "2026-11-05T08:00:00Z", "2026-11-05T07:00:00Z"]
-    real_post = ts.requests.Session.post
-
-    def post(self, url, json, timeout):
-        response = real_post(self, url, json, timeout)
-        response.data = {"data": [{"id": t, "discovered_at": t} for t in newest_first][:json["limit"]]}
-        return response
-    monkeypatch.setattr(ts.requests.Session, "post", post)
-    assert ts.main(["--max-credits", "2", "--queries", "cr", "--since", "2026-11-04T00:00:00Z"]) == 1
-    manifest = manifest_of(tmp_path)
-    assert manifest["queries"][0]["status"] == "error"
-    assert manifest["cursors"]["cr"] == "2026-11-04T00:00:00Z"
+def test_run_fails_loudly_if_job_id_not_is_ignored(monkeypatch, tmp_path):
+    """Otherwise every run would quietly re-buy the same postings."""
+    bodies = fake_api(monkeypatch, tmp_path, {"cr": stamps(30), "latam_remote": []}, honour_job_id_not=False)
+    assert ts.main(["--queries", "cr", "--since", SINCE, "--seen-ids", "cr=30,29"]) == 1
+    assert manifest_of(tmp_path)["queries"][0]["status"] == "error" and len(bodies) == 1
 
 
-def test_latam_uses_the_location_id_filter_not_the_deprecated_pattern():
+def test_latam_uses_the_location_id_filter_and_no_deprecated_parameter():
     body = ts.build_body("latam_remote", 0, 25, None)
-    assert body["job_location_or"] == [{"id": ts.LATAM_REGION_ID}] and "job_location_pattern_or" not in body
-    assert body["order_by"] == [{"field": "discovered_at", "desc": False}]
+    assert body["job_location_or"] == [{"id": ts.LATAM_REGION_ID}]
+    assert "job_location_pattern_or" not in body and "order_by" not in body and "job_id_not" not in body
 
 
 class OneRow:
@@ -477,12 +476,78 @@ class OneRow:
         return self.row
 
 
-def test_since_values_passed_to_the_extractor():
+def test_cursor_values_passed_to_the_extractor():
     started = datetime(2026, 11, 3, 23, 36, tzinfo=timezone.utc)
-    assert run_pipeline.theirstack_since(OneRow(None)) == []
-    assert run_pipeline.theirstack_since(OneRow((None, started))) == ["2026-11-03T22:36:00Z"]    # before migration 11
-    assert run_pipeline.theirstack_since(OneRow(({"cr": "2026-11-05T01:00:00Z", "latam_remote": None}, started))) \
-        == ["cr=2026-11-05T01:00:00Z"]                                                           # latam: backfill
+    args = run_pipeline.theirstack_cursor_args
+    assert args(OneRow(None)) == []
+    assert args(OneRow((None, started))) == ["--since", "2026-11-03T22:36:00Z"]                  # before migration 11
+    assert args(OneRow(({"cr": "2026-11-05T01:00:00Z", "latam_remote": None}, started))) \
+        == ["--since", "cr=2026-11-05T01:00:00Z"]                                                # latam: backfill
+    assert args(OneRow(({"cr": "2026-11-05T01:00:00Z", "latam_remote": None,
+                         "seen_ids": {"latam_remote": [7, 8]}}, started))) \
+        == ["--since", "cr=2026-11-05T01:00:00Z", "--seen-ids", "latam_remote=7,8"]
+
+
+# ---- backup schedule: a day that already has a good run does nothing -----------------------------
+
+class PipelineConn:
+    """Answers run_pipeline's queries and records them."""
+
+    def __init__(self, ran_today):
+        self.ran_today, self.sql = ran_today, []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        self.sql.append(sql)
+        self.row = ((self.ran_today,) if "pipeline_runs" in sql
+                    else None if "etl_runs" in sql else (datetime.now(timezone.utc),))
+        return self
+
+    def fetchone(self):
+        return self.row
+
+
+def run_main(monkeypatch, argv, ran_today=False, step_exit_code=0):
+    conn, commands = PipelineConn(ran_today), []
+
+    def run(cmd, env=None):
+        commands.append(cmd)
+        return step_exit_code
+    monkeypatch.setattr(run_pipeline, "database_url", lambda target: "postgresql://example")
+    monkeypatch.setattr(run_pipeline.psycopg, "connect", lambda *a, **k: conn)
+    monkeypatch.setattr(run_pipeline, "run", run)
+    monkeypatch.setattr(run_pipeline, "scrub_tree", lambda *a: (0, 0))
+    monkeypatch.setattr(run_pipeline.quality_checks, "database_checks", lambda conn: [])
+    monkeypatch.setattr(run_pipeline.quality_checks, "run_checks", lambda *a: [])
+    code = run_pipeline.main(["--target", "main", *argv])
+    recorded = any("INSERT INTO pipeline_runs" in sql for sql in conn.sql)
+    return code, commands, recorded
+
+
+def test_scheduled_run_does_nothing_if_a_run_succeeded_today(monkeypatch):
+    assert run_main(monkeypatch, ["--skip-if-ran-today"], ran_today=True) == (0, [], False)
+
+
+def test_scheduled_run_goes_ahead_if_none_succeeded_today(monkeypatch):
+    code, commands, recorded = run_main(monkeypatch, ["--skip-if-ran-today"], ran_today=False)
+    assert code == 0 and commands and recorded
+
+
+def test_manual_run_ignores_todays_run(monkeypatch):
+    code, commands, _ = run_main(monkeypatch, [], ran_today=True)
+    assert code == 0 and commands
+
+
+def test_only_a_complete_successful_run_counts_for_the_day(monkeypatch):
+    assert run_main(monkeypatch, [], step_exit_code=1)[2] is False            # a step failed: the backup retries
+    assert run_main(monkeypatch, ["--sources", "lever"])[2] is False          # partial
+    assert run_main(monkeypatch, ["--skip-extract"])[2] is False              # reprocessing
+    assert run_main(monkeypatch, ["--dry-run"])[2] is False
 
 
 # ---- one source failing doesn't stop the others --------------------------------------------------

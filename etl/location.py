@@ -14,10 +14,12 @@ When market is None, reason is 'out_of_scope' or 'ambiguous_location' (the keys
 logged in etl_runs.exclusion_reasons). Otherwise reason says which rule matched.
 
 Rules (see CLAUDE.md, "Location scope and filtering"):
-  * 'CR'           any location in Costa Rica (on-site, hybrid or remote)
-  * 'LATAM-remote' remote and open to LATAM / the Americas / worldwide, or to 2+ LATAM countries
+  * 'CR'           located specifically in Costa Rica: on-site or hybrid there, or remote restricted to it
+  * 'LATAM-remote' remote and open to LATAM / the Americas / worldwide, or to 2+ LATAM countries, or to
+                   Costa Rica plus anywhere else
   * 'US-remote'    remote and open to US-based workers
-  * Precedence when several apply: CR > LATAM-remote > US-remote.
+  * Precedence when several apply: CR > LATAM-remote > US-remote. A non-remote Costa Rica location
+    always wins ("Costa Rica | Czech Republic", hybrid): the job can be done from that office.
   * Remote restricted to a single non-CR country (e.g. "Remote - Mexico") is out of scope.
   * A structured country decides the country; regions written in the text (LATAM,
     North America, EMEA) are still added, and "Costa Rica" in the text always counts.
@@ -222,8 +224,10 @@ def _title_geography(title: str) -> tuple[str | None, str] | None:
     geos = {g for g in _part_geos(title) if g != G_WORLD}
     if not geos:
         return None
-    if G_CR in geos:
+    if geos == {G_CR}:
         return CR, "cr_location"
+    if G_CR in geos:
+        return LATAM_REMOTE, "ambiguous_resolved_title"
     latam_countries = {g for g in geos if g.startswith("latam:")}
     if G_LATAM_REGION in geos or len(latam_countries) >= 2:
         return LATAM_REMOTE, "ambiguous_resolved_title"
@@ -316,10 +320,10 @@ def _classify_parts(
         part_text, country = part[0], part[1]
         own_remote = part[2] if len(part) > 2 else None
         geos = _part_geography(part_text, country)
-        if G_CR in geos:
-            return CR, "cr_location"   # highest precedence: stop here
         base_remote = posting_remote if own_remote is None else own_remote
         part_remote = base_remote or bool(REMOTE_RE.search(_norm(part_text)))
+        if G_CR in geos and not part_remote:
+            return CR, "cr_location"   # an office in Costa Rica: highest precedence, stop here
         if part_remote:
             if geos:
                 remote_geos |= geos
@@ -328,6 +332,15 @@ def _classify_parts(
         elif geos == {G_US} and US_REGION_LEVEL_RE.match(_norm(part_text).strip(" ,.-")):
             us_region_level_onsite = True
 
+    if G_CR in remote_geos:
+        norm_title = _norm(title)
+        # "Senior Business Analyst - Latin America, Remote" posted once, tagged with a CR city. Both words
+        # are needed: "FP&A LATAM (GFS Americas)" is a team name on a job based in San José.
+        title_opens_latam = REMOTE_RE.search(norm_title) and (LATAM_REGION_RE.search(norm_title)
+                                                              or LATAM_COUNTRY_RE.search(norm_title))
+        if remote_geos != {G_CR} or title_opens_latam:
+            return LATAM_REMOTE, "cr_and_other_locations"
+        return CR, "cr_location"
     latam_countries = {g for g in remote_geos if g.startswith("latam:")}
     if G_LATAM_REGION in remote_geos:
         return LATAM_REMOTE, "latam_region"
