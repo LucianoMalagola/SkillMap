@@ -31,11 +31,14 @@ For each source (ATS boards, jooble, adzuna, remotive, theirstack):
   7. Deactivate stale jobs (closed postings stay in the table, inactive):
        - boards fetched OK today (and Remotive, when every category was fetched): their
          active jobs not loaded today
-       - any source: jobs not seen for STALE_DAYS (covers Jooble, whose search results
-         aren't a full inventory, and boards removed from companies.csv)
+       - every source except TheirStack: jobs not seen for STALE_DAYS (covers Jooble, whose
+         search results aren't a full inventory, and boards removed from companies.csv)
        - TheirStack is fetched incrementally (each posting once), so its rows take
          first_seen from TheirStack's discovered_at and, if TheirStack reports the posting
-         closed (closed_at), last_seen = closed_at and is_active = FALSE.
+         closed (closed_at), last_seen = closed_at and is_active = FALSE. Otherwise they count
+         as open (jobs.open_status = 'estimated') for ESTIMATED_OPEN_DAYS after posted_at
+         (first_seen if missing). That rule runs on empty fetches too.
+       A fetch that returned nothing for a whole source never triggers the inventory rules.
   8. Log one etl_runs row per source with exclusion counts by reason (and, for TheirStack,
      the credits the extraction spent: etl_runs.api_units_used).
 
@@ -86,7 +89,8 @@ RAW_DIR = ROOT / "data" / "raw"
 SOURCES = ("greenhouse", "lever", "ashby", "recruitee", "personio", "jooble", "adzuna", "remotive", "theirstack")
 MANIFEST_SOURCES = ATS_SOURCES + ("remotive", "theirstack")
 ATS_MATCH_DAYS = 90
-STALE_DAYS = 14
+STALE_DAYS = 14             # keep in step with quality_checks
+ESTIMATED_OPEN_DAYS = 30    # keep in step with quality_checks
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -368,20 +372,29 @@ def load(conn: psycopg.Connection, source: str, rows: list[dict], ok_companies: 
                                    WHERE job_id = %(id)s""", {"closed": row["closed_at"], "id": job_id})
                     stats["closed"] += 1
 
-        if ok_companies:   # ATS boards fetched OK today: anything not loaded today is gone
+        # An empty fetch proves nothing about what's open, so the inventory rules need seen_ids.
+        if ok_companies and seen_ids:   # ATS boards fetched OK today: anything not loaded today is gone
             loaded_ids = [r["external_id"] for r in rows]
             cur.execute("""UPDATE jobs SET is_active = FALSE
                                WHERE source = %s AND is_active AND company = ANY(%s)
                                  AND NOT (external_id = ANY(%s))""", (source, ok_companies, loaded_ids))
             stats["deactivated"] += cur.rowcount
-        if full_inventory:  # whole source fetched completely (Remotive): same rule, source-wide
+        if full_inventory and seen_ids:  # whole source fetched completely (Remotive): same rule, source-wide
             cur.execute("""UPDATE jobs SET is_active = FALSE
                                WHERE source = %s AND is_active AND NOT (external_id = ANY(%s))""",
                         (source, [r["external_id"] for r in rows]))
             stats["deactivated"] += cur.rowcount
-        cur.execute("""UPDATE jobs SET is_active = FALSE
-                           WHERE source = %s AND is_active AND last_seen < now() - make_interval(days => %s)""",
-                    (source, STALE_DAYS))
+        if source == "theirstack":
+            # Never re-checked, so age decides, on empty runs too (the date passes either way).
+            # last_seen stays: it's what keeps the posting in the 90-day views.
+            cur.execute("""UPDATE jobs SET is_active = FALSE
+                               WHERE source = %s AND is_active
+                                 AND COALESCE(posted_at, first_seen) < now() - make_interval(days => %s)""",
+                        (source, ESTIMATED_OPEN_DAYS))
+        else:
+            cur.execute("""UPDATE jobs SET is_active = FALSE
+                               WHERE source = %s AND is_active AND last_seen < now() - make_interval(days => %s)""",
+                        (source, STALE_DAYS))
         stats["deactivated"] += cur.rowcount
     return stats
 

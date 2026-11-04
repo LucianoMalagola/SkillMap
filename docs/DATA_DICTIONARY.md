@@ -116,10 +116,12 @@ Headline counts per market and role. All sources; the *_full_text_* columns are 
 | `market` | text | Label: "Market". CR, US-remote or LATAM-remote. |
 | `role_category` | text | Label: "Role". |
 | `postings_seen_90d` | bigint | Label: "Postings seen in the last 90 days" (includes postings that have since closed). |
-| `postings_open_now` | bigint | Label: "Open postings now" (still listed as of the latest run). |
+| `postings_open_now` | bigint | Label: "Open postings now". postings_open_verified + postings_open_estimated. |
 | `postings_full_text_seen_90d` | bigint | Label: "Postings with full description (last 90 days)". Base of the tool rankings. |
 | `postings_full_text_open_now` | bigint | Label: "Open postings with full description". |
 | `role_family` | text | Label: "Role family". |
+| `postings_open_verified` | bigint | Label: "Open now (verified)". Open postings from sources re-checked every run. |
+| `postings_open_estimated` | bigint | Label: "Open now (estimated)". TheirStack postings counted as open for 30 days after posted_at; not re-checked. |
 
 ### v_posting_skills
 
@@ -140,6 +142,7 @@ Long format: one row per (posting, tool). Postings with no tools have no rows he
 | `seen_90d` | boolean | Label: "Seen in the last 90 days". |
 | `first_seen` | timestamp with time zone | Label: "First seen by SkillMap". |
 | `last_seen` | timestamp with time zone | Label: "Last seen by SkillMap". |
+| `open_status` | text | Label: "Open status". verified = re-checked every run; estimated = open by rule (TheirStack, 30 days after posting); empty = closed. |
 
 ### v_postings
 
@@ -148,7 +151,7 @@ One row per loaded posting, for EDA. All sources, all time (filter seen_90d / op
 | Column | Type | Label / meaning |
 |---|---|---|
 | `job_id` | bigint | Posting key (joins v_posting_skills). |
-| `source` | text | Label: "Source". greenhouse, lever, ashby, recruitee, personio (ATS boards), adzuna, jooble, remotive. |
+| `source` | text | Label: "Source". greenhouse, lever, ashby, recruitee, personio (ATS boards), adzuna, jooble, remotive, theirstack. |
 | `company` | text | Label: "Company". |
 | `title` | text | Label: "Job title". |
 | `role_family` | text | Label: "Role family". |
@@ -164,12 +167,13 @@ One row per loaded posting, for EDA. All sources, all time (filter seen_90d / op
 | `posted_at` | timestamp with time zone | Label: "Posted (per source)". Can be the last update date on some ATSs. |
 | `first_seen` | timestamp with time zone | Label: "First seen by SkillMap". |
 | `last_seen` | timestamp with time zone | Label: "Last seen by SkillMap". |
-| `open_now` | boolean | Label: "Open now". Still listed as of the latest run. |
+| `open_now` | boolean | Label: "Open now". Still listed as of the latest run, or (open_status = estimated) within 30 days of posting. |
 | `seen_90d` | boolean | Label: "Seen in the last 90 days". The window the dashboard views use. |
 | `days_listed` | integer | Label: "Days listed". Calendar days from first_seen to last_seen, inclusive. |
 | `description_length` | integer | Label: "Description length (characters)". Snippets are ~500. |
 | `n_tools` | bigint | Label: "Tools mentioned". |
 | `url` | text | Label: "Posting link". Tracking parameters removed. |
+| `open_status` | text | Label: "Open status". verified = re-checked every run; estimated = open by rule (TheirStack, 30 days after posting); empty = closed. |
 
 ### v_roles
 

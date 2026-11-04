@@ -72,7 +72,7 @@ When the same posting arrives from an ATS board and an aggregator (the aggregato
 Dashboard views. Two time windows, named in every column:
 
 - **Last 90 days** (`*_90d`): postings seen at least once in the last 90 days, including ones that have since closed. Used for tool demand, so percentages reflect a quarter rather than one day.
-- **Open now** (`*_open_now`): postings still listed as of the latest run.
+- **Open now** (`*_open_now`): postings still listed as of the latest run (`open_status = 'verified'`). TheirStack postings are fetched only once, so they count as open for 30 days after posting (`open_status = 'estimated'`).
 
 | View | What it shows | Sources |
 |---|---|---|

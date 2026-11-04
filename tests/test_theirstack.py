@@ -6,8 +6,11 @@ from __future__ import annotations
 
 import sys
 from collections import Counter
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -15,10 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import extract_theirstack as ts
 import quality_checks
 import run_pipeline
+import transform_load
 from location import classify_posting
 from normalize import ats_refs, looks_full, match_key, normalize, strip_markdown
 from skills import SkillExtractor
-from transform_load import drop_ats_copies, transform
+from transform_load import api_units_used, drop_ats_copies, load, read_raw, transform
 
 BODY = ("### **About the role**\n\nWe are looking for a **Data Analyst** to build dashboards in Power BI "
         "and write SQL queries against our warehouse. " + "You will partner with finance and operations teams "
@@ -192,6 +196,104 @@ def test_cap_reached_spends_nothing_and_does_not_fail(monkeypatch, tmp_path, cap
     monkeypatch.setattr(ts, "RAW_DIR", tmp_path)
     assert ts.main([]) == 0
     assert "CAP REACHED" in capsys.readouterr().out
+    assert read_raw("theirstack", next(tmp_path.iterdir())) == ([], None, 0, False)   # transform sees a clean empty day
+
+
+def test_zero_new_postings_is_a_normal_run(monkeypatch, tmp_path, capsys):
+    """Real extractor -> manifest -> read_raw -> transform on an empty search result."""
+    class FakeResponse:
+        status_code = 200
+        text = '{"metadata": {"total_results": 0}, "data": []}'
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": []}
+
+    class Balance(FakeResponse):
+        def json(self):
+            return {"api_credits": 200, "used_api_credits": 169}
+
+    class FakeSession:
+        headers: dict = {}
+
+        def get(self, *a, **k):
+            return Balance()
+
+        def post(self, *a, **k):
+            return FakeResponse()
+
+    monkeypatch.setenv("THEIRSTACK_API_KEY", "x" * 20)
+    monkeypatch.setattr(ts.requests, "Session", FakeSession)
+    monkeypatch.setattr(ts, "RAW_DIR", tmp_path)
+    monkeypatch.setattr(ts, "REQUEST_DELAY", 0)
+    assert ts.main(["--since", "2026-11-03T22:00:00+00:00"]) == 0
+
+    day_dir = next(tmp_path.iterdir())
+    items, ok_companies, failed, full_inventory = read_raw("theirstack", day_dir)
+    assert (items, ok_companies, failed, full_inventory) == ([], None, 0, False)
+    assert transform("theirstack", items, SkillExtractor({})) == ([], Counter())
+    assert api_units_used("theirstack", day_dir) == 0
+    assert "2 requests, 0 postings, 0 credits" in capsys.readouterr().out
+
+
+class RecordingConn:
+    """Stands in for the database: records the statements load() sends."""
+
+    def __init__(self):
+        self.sql = []
+
+    def transaction(self):
+        return nullcontext()
+
+    def cursor(self):
+        conn = self
+
+        class Cursor:
+            rowcount = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def execute(self, sql, params=None):
+                conn.sql.append(sql)
+        return Cursor()
+
+
+@pytest.mark.parametrize("source, ok_companies, full_inventory", [
+    ("theirstack", None, False), ("greenhouse", ["Acme"], False), ("lever", ["Acme"], False), ("ashby", ["Acme"], False),
+    ("recruitee", ["Acme"], False), ("personio", ["Acme"], False), ("remotive", None, True), ("adzuna", None, False),
+    ("jooble", None, False)])
+def test_empty_fetch_triggers_no_inventory_deactivation(source, ok_companies, full_inventory):
+    conn = RecordingConn()
+    stats = load(conn, source, [], ok_companies, {}, full_inventory, [])
+    assert stats["deactivated"] == 0 and stats["removed"] == 0
+    assert not any("NOT (external_id" in s for s in conn.sql)       # "not in today's data" rules didn't run
+    assert len(conn.sql) == 1                                       # only the time-based rule
+
+
+def test_each_source_gets_its_own_open_rule():
+    conn = RecordingConn()
+    load(conn, "theirstack", [], None, {}, False, [])
+    assert "COALESCE(posted_at, first_seen)" in conn.sql[0] and "last_seen" not in conn.sql[0]
+    conn = RecordingConn()
+    load(conn, "adzuna", [], None, {}, False, [])
+    assert "last_seen <" in conn.sql[0] and "posted_at" not in conn.sql[0]
+
+
+def test_inventory_rule_still_runs_when_the_fetch_had_postings():
+    conn = RecordingConn()
+    load(conn, "greenhouse", [], ["Acme"], {}, False, ["42"])       # posting present but excluded today
+    assert any("company = ANY" in s for s in conn.sql)
+
+
+def test_open_rule_constants_stay_in_step():
+    assert quality_checks.STALE_DAYS == transform_load.STALE_DAYS
+    assert quality_checks.ESTIMATED_OPEN_DAYS == transform_load.ESTIMATED_OPEN_DAYS
 
 
 # ---- pipeline wiring and quality checks ---------------------------------------------------------

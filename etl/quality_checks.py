@@ -10,6 +10,7 @@ Checks on the whole database (always):
   required_fields      no NULL title/company... in fields the dashboards rely on
   no_orphans           every job_skills row points at a job and a skill
   stale_deactivated    no posting still active after STALE_DAYS without being seen
+                       (INCREMENTAL_SOURCES: after ESTIMATED_OPEN_DAYS from posted_at)
   pct_in_range         every percentage in the views is between 0 and 100
   views_ok             every v_* view (and fn_skill_match) runs
   view_contract        every column in docs/view_contract.json still exists (dashboards depend on them)
@@ -45,6 +46,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_FILE = ROOT / "docs" / "view_contract.json"
 STALE_DAYS = 14            # keep in step with transform_load.STALE_DAYS
+ESTIMATED_OPEN_DAYS = 30   # keep in step with transform_load.ESTIMATED_OPEN_DAYS
 DROP_RATIO = 0.5           # fail if a source loads less than half of what its previous run loaded...
 DROP_MIN_PREVIOUS = 10     # ...and the previous run loaded at least this many (small numbers are noisy)
 INCREMENTAL_SOURCES = ("theirstack",)
@@ -94,9 +96,13 @@ def database_checks(conn: psycopg.Connection) -> list[Result]:
                                WHERE j.job_id IS NULL OR s.skill_id IS NULL""")
     out.append(Result("no_orphans", orphans == 0, f"{orphans} orphan job_skills rows"))
 
-    stale = _scalar(conn, """SELECT COUNT(*) FROM jobs WHERE is_active
-                             AND last_seen < now() - make_interval(days => %s)""", (STALE_DAYS + 1,))
-    out.append(Result("stale_deactivated", stale == 0, f"{stale} active postings not seen for >{STALE_DAYS} days"))
+    stale = _scalar(conn, """SELECT COUNT(*) FROM jobs WHERE is_active AND CASE
+                               WHEN source = ANY(%s) THEN COALESCE(posted_at, first_seen) < now() - make_interval(days => %s)
+                               ELSE last_seen < now() - make_interval(days => %s) END""",
+                    (list(INCREMENTAL_SOURCES), ESTIMATED_OPEN_DAYS + 1, STALE_DAYS + 1))
+    out.append(Result("stale_deactivated", stale == 0,
+                      f"{stale} active postings past their rule (not seen for >{STALE_DAYS} days; "
+                      f"{', '.join(INCREMENTAL_SOURCES)}: posted >{ESTIMATED_OPEN_DAYS} days ago)"))
 
     views = [r[0] for r in conn.execute("""SELECT viewname FROM pg_views
                                            WHERE schemaname = 'public' AND viewname LIKE 'v\\_%' ORDER BY 1""")]

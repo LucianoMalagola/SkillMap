@@ -27,7 +27,9 @@
       "postings_open_now",
       "postings_full_text_seen_90d",
       "postings_full_text_open_now",
-      "role_family"
+      "role_family",
+      "postings_open_verified",
+      "postings_open_estimated"
     ],
     "v_posting_skills": [
       "job_id",
@@ -42,7 +44,8 @@
       "open_now",
       "seen_90d",
       "first_seen",
-      "last_seen"
+      "last_seen",
+      "open_status"
     ],
     "v_postings": [
       "job_id",
@@ -67,7 +70,8 @@
       "days_listed",
       "description_length",
       "n_tools",
-      "url"
+      "url",
+      "open_status"
     ],
     "v_roles": [
       "role_family",

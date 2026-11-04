@@ -53,6 +53,8 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   08 role families (`role_families` table + `jobs.role_family`, FK on the pair, mirrors `roles.ROLE_FAMILIES`;
   transform_load refuses to run if they differ), `etl_runs.jobs_loaded`, `n` / `enough_data` (n >= 10)
   on tool views, directed co-occurrence, analysis views. 09 `theirstack` source, `etl_runs.api_units_used`.
+  10 `jobs.open_status` (generated: 'verified' = re-checked every run, 'estimated' = TheirStack, NULL = closed),
+  exposed in `v_postings`, `v_posting_skills`, and as `postings_open_verified` / `_estimated` in `v_posting_counts`.
   Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`, `role_families`, `schema_migrations`.
   Views: `v_skill_demand`, `v_skill_demand_segment`, `v_skill_cooccurrence`, `v_modality_mix`,
   `v_posting_counts`, `v_weekly_postings`, `v_weekly_skill_trend`, `v_last_updated`, `v_postings`,
@@ -231,7 +233,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       but excluded by current rules are **removed** (they'd otherwise linger in the 90-day views).
       Role categories (2026-11-02): Data Analyst, BI Analyst, Data Reporting, Business Operations Analyst
       (narrow), Marketing Analyst, Business Analyst, Analytics & Insights; see `roles.py` docstring.
-      Deactivation: boards fetched OK → their jobs not loaded today; any source → not seen for 14 days
+      Deactivation: boards fetched OK → their jobs not loaded today; any source but TheirStack → not seen for 14 days
       (Jooble isn't a full inventory). One `etl_runs` row per source, own transaction per source.
       `--dry-run` writes nothing. Decisions:
       - Roles are narrow (see `roles.py` docstring): no Data Scientist/Engineer, Business Analyst,
@@ -252,10 +254,22 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       required fields, orphans, active-but-stale, % outside 0-100, broken views, contract/label gaps,
       a source that failed or fetched nothing, 0 loaded, a source loading <50% of its previous run (if >=10).
 - [x] GitHub Actions: `.github/workflows/pipeline.yml` (manual `target` dev|main, daily cron on main;
-      secrets `DATABASE_URL_DEV`, `DATABASE_URL_MAIN`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `JOOBLE_API_KEY`;
-      only the target's URL is passed; raw artifact 5 days) + `tests.yml` (ruff + pytest on push).
-      Repo is public: artifacts are public (keys redacted by extractors and `redact.scrub_tree`), and
+      secrets `DATABASE_URL_DEV`, `DATABASE_URL_MAIN`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `JOOBLE_API_KEY`,
+      `THEIRSTACK_API_KEY`; only the target's URL is passed; raw artifact 5 days) + `tests.yml` (ruff + pytest
+      on push). Repo is public: artifacts are public (keys redacted by extractors and `redact.scrub_tree`), and
       GitHub disables scheduled workflows after 60 days without repo activity.
+- [x] **Main is live; the daily schedule is on** (since 2026-11-03: 11:17 UTC = 05:17 Costa Rica).
+      First main run (2026-11-03): 176 postings (117 CR, 55 US-remote, 4 LATAM-remote), 12/12 checks;
+      TheirStack backfill 121 credits (CR complete: 120 of 120).
+- [x] Open status (decided by Luciano 2026-11-03). Sources re-checked every run: 14-day stale rule,
+      `open_status = 'verified'`. TheirStack (fetched once): open for 30 days after `posted_at` (`first_seen` if
+      missing) unless TheirStack reports it closed, `open_status = 'estimated'`. The 30-day rule leaves `last_seen`
+      alone, so those postings stay in the 90-day tool views.
+- [x] Empty fetches: TheirStack returning nothing is a normal run (logged, passes; only its age rule still runs).
+      A whole re-checked source returning nothing fails the run (`sources_nonempty`), but deactivates nothing.
+      A single empty ATS board in an otherwise normal fetch still closes that board's postings.
+- TheirStack credits: no backfills or credit-spending experiments before the quota resets
+  (`earliest_expiration` = 2026-12-02 20:23 UTC). Open question: LATAM-remote returned 1 posting, 19 were measured.
 - [ ] Data Studio dashboard (public link) + Power BI `.pbix` with "How well do I match?" page
 - [x] README: architecture, sources, three markets, data model, limitations, credits (Adzuna, Remotive, Jooble)
 - [ ] README: findings with numbers and dashboard screenshots (after the dashboards)
