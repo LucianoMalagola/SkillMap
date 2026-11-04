@@ -17,10 +17,10 @@ Steps:
      extract_jooble / extract_theirstack for the selected sources. A failing extractor doesn't
      stop the others; the run is marked failed at the end.
      TheirStack is metered (credits shared by dev, main and local runs): it gets
-     --since <last successful TheirStack run on the target, minus 1 h> and a per-run cap
-     (THEIRSTACK_MAX_CREDITS: small on dev, enough for the 90-day backfill on main;
+     --since <the per-query cursors of the last successful extraction on the target> and a
+     per-run cap (THEIRSTACK_MAX_CREDITS: small on dev, enough for the 90-day backfill on main;
      --theirstack-max-credits overrides). The extractor also never exceeds the month's
-     credits; hitting a cap is logged, not a failure.
+     credits; hitting a cap is logged, not a failure, and the cursor keeps its place.
   3. Scrub: redact any API key found in data/raw/ (safety net before the artifact upload).
   4. Transform + load (etl/transform_load.py) for the selected sources, always for ONE raw
      day (today, or --date). Never "latest available": reloading an old day would mark
@@ -39,7 +39,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta, timezone
 from pathlib import Path
 
 import psycopg
@@ -96,12 +96,20 @@ def extract_commands(sources: list[str], theirstack_args: list[str] | None = Non
     return cmds
 
 
-def theirstack_since(conn) -> datetime | None:
-    """Start of the last successful TheirStack run that fetched something, minus an overlap;
-    None = never ran on this database -> backfill."""
-    last = conn.execute("""SELECT max(started_at) FROM etl_runs
-                           WHERE source = 'theirstack' AND status = 'success' AND jobs_fetched > 0""").fetchone()[0]
-    return last - SINCE_OVERLAP if last else None
+def theirstack_since(conn) -> list[str]:
+    """--since values from the last successful extraction (api_units_used is only set when the run
+    extracted, so reprocessing raw files can't move the cursor). [] or a query left out = backfill.
+    Runs from before migration 11 have no cursor: their start minus an overlap, for every query."""
+    row = conn.execute("""SELECT source_cursor, started_at FROM etl_runs
+                          WHERE source = 'theirstack' AND status = 'success' AND api_units_used IS NOT NULL
+                            AND (source_cursor IS NOT NULL OR jobs_fetched > 0)
+                          ORDER BY started_at DESC LIMIT 1""").fetchone()
+    if not row:
+        return []
+    cursor, started = row
+    if cursor is None:
+        return [(started - SINCE_OVERLAP).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")]
+    return [f"{query}={timestamp}" for query, timestamp in cursor.items() if timestamp]
 
 
 def run(argv: list[str], env: dict | None = None) -> int:
@@ -153,11 +161,11 @@ def main(argv: list[str] | None = None) -> int:
 
     with psycopg.connect(url, autocommit=True) as conn:
         run_start = conn.execute("SELECT now()").fetchone()[0]   # DB clock: etl_runs uses it too
-        since = theirstack_since(conn) if "theirstack" in sources else None
+        since = theirstack_since(conn) if "theirstack" in sources else []
     theirstack_args = ["--max-credits", str(args.theirstack_max_credits if args.theirstack_max_credits is not None
                                             else THEIRSTACK_MAX_CREDITS[args.target])]
     if since:
-        theirstack_args += ["--since", since.isoformat(timespec="seconds")]
+        theirstack_args += ["--since", *since]
 
     # 2. extract
     if not skip_extract:

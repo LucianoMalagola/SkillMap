@@ -404,13 +404,13 @@ def start_run(conn, source: str) -> int:
 
 
 def finish_run(conn, run_id: int, status: str, fetched: int, new: int, excluded: Counter, error: str | None = None,
-               loaded: int = 0, api_units: int | None = None):
+               loaded: int = 0, api_units: int | None = None, cursors: dict | None = None):
     conn.execute("""UPDATE etl_runs SET finished_at = now(), status = %s, jobs_fetched = %s, jobs_new = %s,
                     jobs_loaded = %s, jobs_excluded = %s, exclusion_reasons = %s, error_message = %s,
-                    api_units_used = %s
+                    api_units_used = %s, source_cursor = %s
                     WHERE run_id = %s""",
                  (status, fetched, new, loaded, sum(excluded.values()), Jsonb(dict(excluded)), error, api_units,
-                  run_id))
+                  Jsonb(cursors) if cursors else None, run_id))
 
 
 def api_units_used(source: str, day_dir: Path) -> int | None:
@@ -418,6 +418,13 @@ def api_units_used(source: str, day_dir: Path) -> int | None:
     if source != "theirstack":
         return None
     return json.loads((day_dir / "_manifest.json").read_text(encoding="utf-8")).get("credits_used")
+
+
+def extraction_cursors(source: str, day_dir: Path) -> dict | None:
+    """Where the next extraction starts, per query (TheirStack manifest); None for other sources."""
+    if source != "theirstack":
+        return None
+    return json.loads((day_dir / "_manifest.json").read_text(encoding="utf-8")).get("cursors")
 
 
 def check_role_families(conn) -> None:
@@ -461,31 +468,34 @@ def main() -> int:
             if day_dir is None:
                 print(f"[{source}] no raw data found, skipped")
                 continue
-            items, ok_companies, failed_boards, full_inventory = read_raw(source, day_dir)
-            rows, excluded = transform(source, items, extractor)
-            if source in AGGREGATOR_SOURCES:
-                index = index or ats_index(conn)         # read once, after today's ATS loads
-                rows = drop_ats_copies(source, rows, excluded, *index)
-            seen_ids = list({normalize(source, job, company)["external_id"] for company, job in items})
-            boards = f", {len(ok_companies)} boards ok / {failed_boards} failed" if ok_companies is not None else ""
-            print(f"[{source}] {day_dir.name}: {len(items)} postings{boards} -> {len(rows)} to load; "
-                  f"excluded {sum(excluded.values())} {dict(excluded.most_common())}")
-            if args.dry_run:
-                continue
-
-            run_id = start_run(conn, source)
+            run_id = None if args.dry_run else start_run(conn, source)
+            items, excluded = [], Counter()
             try:
+                items, ok_companies, failed_boards, full_inventory = read_raw(source, day_dir)
+                rows, excluded = transform(source, items, extractor)
+                if source in AGGREGATOR_SOURCES:
+                    index = index or ats_index(conn)         # read once, after today's ATS loads
+                    rows = drop_ats_copies(source, rows, excluded, *index)
+                seen_ids = list({normalize(source, job, company)["external_id"] for company, job in items})
+                boards = f", {len(ok_companies)} boards ok / {failed_boards} failed" if ok_companies is not None else ""
+                print(f"[{source}] {day_dir.name}: {len(items)} postings{boards} -> {len(rows)} to load; "
+                      f"excluded {sum(excluded.values())} {dict(excluded.most_common())}")
+                if args.dry_run:
+                    continue
+
                 units = api_units_used(source, day_dir) if args.log_api_units else None
+                cursors = extraction_cursors(source, day_dir) if args.log_api_units else None
                 stats = load(conn, source, rows, ok_companies, skill_ids, full_inventory, seen_ids)
                 finish_run(conn, run_id, "success", len(items), stats["new"], excluded, loaded=len(rows),
-                           api_units=units)
+                           api_units=units, cursors=cursors)
                 print(f"[{source}] loaded: {stats['new']} new, {stats['updated']} updated, "
                       f"{stats['removed']} removed (excluded by current rules), "
                       f"{stats['deactivated'] + stats['closed']} deactivated (etl_runs.run_id={run_id})")
             except Exception as err:  # noqa: BLE001 -- any error: log it in etl_runs, go on with the next source
                 failures += 1
-                finish_run(conn, run_id, "failed", len(items), 0, excluded, f"{type(err).__name__}: {err}")
-                print(f"[{source}] FAILED, rolled back: {type(err).__name__}: {err}")
+                if run_id is not None:
+                    finish_run(conn, run_id, "failed", len(items), 0, excluded, f"{type(err).__name__}: {err}")
+                print(f"[{source}] FAILED, nothing written for it: {type(err).__name__}: {err}")
 
         if not args.dry_run:
             with conn.transaction():

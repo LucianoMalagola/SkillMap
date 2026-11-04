@@ -4,6 +4,7 @@ Synthetic postings shaped like the real API responses of 2026-11-02 (no personal
 
 from __future__ import annotations
 
+import json
 import sys
 from collections import Counter
 from contextlib import nullcontext
@@ -335,3 +336,194 @@ def test_incremental_source_exempt_from_empty_and_drop_checks():
     runs = [("greenhouse", "success", 0, 0, None)]
     results = {r.name: r for r in quality_checks.run_checks(FakeConn(runs, {"greenhouse": 25}), since, ["greenhouse"])}
     assert not results["sources_nonempty"].ok and not results["no_unusual_drop"].ok
+
+
+# ---- cursor: a run stopped by a cap never loses postings ----------------------------------------
+
+def fake_api(monkeypatch, tmp_path, postings, balance=None):
+    """A TheirStack that honours discovered_at_gte, limit, page and ascending order.
+    postings: {query: [iso timestamp, ...]}. Returns the request bodies, for assertions."""
+    bodies = []
+
+    class Response:
+        status_code = 200
+
+        def __init__(self, data):
+            self.data = data
+            self.text = '{"data": []}'
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.data
+
+    class Session:
+        headers: dict = {}
+
+        def get(self, *a, **k):
+            return Response(balance or {"api_credits": 200, "used_api_credits": 0})
+
+        def post(self, url, json, timeout):
+            bodies.append(json)
+            found = postings["latam_remote" if "job_location_or" in json else "cr"]
+            found = sorted(t for t in found if not json.get("discovered_at_gte")
+                           or datetime.fromisoformat(t) >= datetime.fromisoformat(json["discovered_at_gte"]))
+            page = found[json["page"] * 25:][:json["limit"]]
+            return Response({"data": [{"id": t, "discovered_at": t} for t in page]})
+
+    monkeypatch.setenv("THEIRSTACK_API_KEY", "x" * 20)
+    monkeypatch.setattr(ts.requests, "Session", Session)
+    monkeypatch.setattr(ts, "RAW_DIR", tmp_path)
+    monkeypatch.setattr(ts, "REQUEST_DELAY", 0)
+    return bodies
+
+
+def manifest_of(tmp_path) -> dict:
+    return json.loads((next(tmp_path.iterdir()) / "_manifest.json").read_text(encoding="utf-8"))
+
+
+def stamps(n):
+    return [f"2026-11-05T{h:02d}:00:00Z" for h in range(n)]
+
+
+def test_capped_run_then_next_run_fetches_every_posting(monkeypatch, tmp_path):
+    cr = stamps(6)
+    bodies = fake_api(monkeypatch, tmp_path, {"cr": cr, "latam_remote": []})
+    assert ts.main(["--max-credits", "4", "--queries", "cr", "--since", "2026-11-04T00:00:00Z"]) == 0
+    first = manifest_of(tmp_path)
+    assert first["queries"][0]["status"] == "capped" and first["queries"][0]["n_jobs"] == 4
+    assert first["cursors"]["cr"] == cr[3]              # the last posting fetched, not the date of the run
+
+    del bodies[:]
+    assert ts.main(["--max-credits", "50", "--queries", "cr", "--since", f"cr={first['cursors']['cr']}"]) == 0
+    second = manifest_of(tmp_path)
+    assert bodies[0]["discovered_at_gte"] == cr[3]
+    assert second["queries"][0]["status"] == "ok" and second["queries"][0]["n_jobs"] == 3   # cr[3] again, cr[4], cr[5]
+    assert second["cursors"]["cr"] != cr[5]             # finished: moves to this run's start (minus overlap)
+
+
+def test_cap_reached_in_the_first_query_leaves_the_second_cursor_alone(monkeypatch, tmp_path):
+    fake_api(monkeypatch, tmp_path, {"cr": stamps(5), "latam_remote": stamps(2)})
+    since = ["cr=2026-11-04T00:00:00Z", "latam_remote=2026-11-01T00:00:00Z"]
+    assert ts.main(["--max-credits", "5", "--since", *since]) == 0
+    assert manifest_of(tmp_path)["cursors"]["latam_remote"] == "2026-11-01T00:00:00Z"
+
+
+def test_no_credits_at_all_moves_nothing(monkeypatch, tmp_path):
+    bodies = fake_api(monkeypatch, tmp_path, {"cr": stamps(3), "latam_remote": []},
+                      balance={"api_credits": 200, "used_api_credits": 195})
+    assert ts.main(["--since", "2026-11-04T00:00:00Z"]) == 0
+    assert bodies == []
+    assert set(manifest_of(tmp_path)["cursors"].values()) == {"2026-11-04T00:00:00Z"}
+
+
+def test_first_run_stopped_before_fetching_stays_a_backfill(monkeypatch, tmp_path):
+    fake_api(monkeypatch, tmp_path, {"cr": [], "latam_remote": []},
+             balance={"api_credits": 200, "used_api_credits": 195})
+    assert ts.main([]) == 0
+    assert set(manifest_of(tmp_path)["cursors"].values()) == {None}
+
+
+def test_free_plan_page_limit_continues_from_the_cursor(monkeypatch, tmp_path):
+    many = [f"2026-11-05T{h:02d}:{m:02d}:00Z" for h in range(4) for m in range(60)][:130]
+    fake_api(monkeypatch, tmp_path, {"cr": many, "latam_remote": []})
+    assert ts.main(["--queries", "cr"]) == 0
+    manifest = manifest_of(tmp_path)
+    assert manifest["queries"][0]["status"] == "page_limit"
+    assert manifest["cursors"]["cr"] == many[124]
+
+
+def test_latam_query_has_its_own_cap_and_keeps_its_place(monkeypatch, tmp_path):
+    latam = stamps(5)
+    fake_api(monkeypatch, tmp_path, {"cr": [], "latam_remote": latam})
+    assert ts.main(["--since", "2026-11-04T00:00:00Z"]) == 0
+    manifest = manifest_of(tmp_path)
+    assert manifest["queries"][1]["n_jobs"] == ts.QUERY_MAX_CREDITS["latam_remote"]
+    assert manifest["cursors"]["latam_remote"] == latam[2]
+
+
+def test_cursor_stays_put_if_results_are_not_oldest_first(monkeypatch, tmp_path):
+    """order_by is deprecated: if TheirStack stops honouring it, a stopped run must not skip anything."""
+    fake_api(monkeypatch, tmp_path, {"cr": [], "latam_remote": []})
+    newest_first = ["2026-11-05T09:00:00Z", "2026-11-05T08:00:00Z", "2026-11-05T07:00:00Z"]
+    real_post = ts.requests.Session.post
+
+    def post(self, url, json, timeout):
+        response = real_post(self, url, json, timeout)
+        response.data = {"data": [{"id": t, "discovered_at": t} for t in newest_first][:json["limit"]]}
+        return response
+    monkeypatch.setattr(ts.requests.Session, "post", post)
+    assert ts.main(["--max-credits", "2", "--queries", "cr", "--since", "2026-11-04T00:00:00Z"]) == 1
+    manifest = manifest_of(tmp_path)
+    assert manifest["queries"][0]["status"] == "error"
+    assert manifest["cursors"]["cr"] == "2026-11-04T00:00:00Z"
+
+
+def test_latam_uses_the_location_id_filter_not_the_deprecated_pattern():
+    body = ts.build_body("latam_remote", 0, 25, None)
+    assert body["job_location_or"] == [{"id": ts.LATAM_REGION_ID}] and "job_location_pattern_or" not in body
+    assert body["order_by"] == [{"field": "discovered_at", "desc": False}]
+
+
+class OneRow:
+    def __init__(self, row):
+        self.row = row
+
+    def execute(self, sql):
+        return self
+
+    def fetchone(self):
+        return self.row
+
+
+def test_since_values_passed_to_the_extractor():
+    started = datetime(2026, 11, 3, 23, 36, tzinfo=timezone.utc)
+    assert run_pipeline.theirstack_since(OneRow(None)) == []
+    assert run_pipeline.theirstack_since(OneRow((None, started))) == ["2026-11-03T22:36:00Z"]    # before migration 11
+    assert run_pipeline.theirstack_since(OneRow(({"cr": "2026-11-05T01:00:00Z", "latam_remote": None}, started))) \
+        == ["cr=2026-11-05T01:00:00Z"]                                                           # latam: backfill
+
+
+# ---- one source failing doesn't stop the others --------------------------------------------------
+
+def test_a_source_with_unreadable_raw_files_does_not_stop_the_others(monkeypatch, tmp_path, capsys):
+    finished = {}
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, sql, params=None):
+            return self
+
+        def fetchall(self):
+            return []
+
+        def transaction(self):
+            return nullcontext()
+
+    def read(source, day_dir):
+        if source == "lever":
+            raise FileNotFoundError("_manifest.json")
+        return [], ["Acme"], 0, False
+
+    runs = iter(range(1, 10))
+    monkeypatch.setattr(transform_load.psycopg, "connect", lambda *a, **k: Conn())
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    monkeypatch.setattr(transform_load, "check_role_families", lambda conn: None)
+    monkeypatch.setattr(transform_load, "latest_day_dir", lambda source, day: tmp_path)
+    monkeypatch.setattr(transform_load, "read_raw", read)
+    monkeypatch.setattr(transform_load, "start_run", lambda conn, source: next(runs))
+    monkeypatch.setattr(transform_load, "load", lambda *a: Counter())
+    monkeypatch.setattr(transform_load, "remove_aggregator_copies", lambda conn: 0)
+    monkeypatch.setattr(transform_load, "finish_run",
+                        lambda conn, run_id, status, *a, **k: finished.setdefault(run_id, status))
+    monkeypatch.setattr(sys, "argv", ["transform_load", "--sources", "greenhouse", "lever", "ashby"])
+
+    assert transform_load.main() == 1                                          # the run is reported as failed...
+    assert finished == {1: "success", 2: "failed", 3: "success"}               # ...but ashby, after lever, still loaded
+    assert "[lever] FAILED" in capsys.readouterr().out

@@ -16,16 +16,21 @@ results per search; 10 requests a minute. Hard caps, enforced before every reque
     of truth, shared by every run (dev, main, laptop). A run never lets the month's usage
     go above api_credits - RESERVE_CREDITS (kept for manual checks).
   * per run: --max-credits (run_pipeline passes a small cap for dev, a larger one for main).
+  * per query: QUERY_MAX_CREDITS, so a broad query can't use up what the others need.
 Reaching a cap is NOT an error: it is logged, recorded in the manifest, and the run goes on
-(exit 0). Postings left out by a cap are the oldest ones (results are newest first).
+(exit 0). Nothing is lost: results come oldest first, and each query's cursor (manifest
+"cursors", stored in etl_runs.source_cursor once loaded) only moves as far as what was fetched:
+  * query finished          -> this run's start, minus an hour of overlap
+  * stopped early           -> discovered_at of the last posting fetched
+  * stopped, nothing fetched -> unchanged (no cursor yet = backfill next time)
 
-Incremental: --since <ISO timestamp> asks only for postings TheirStack discovered after it
-(run_pipeline passes the start of the last successful TheirStack run on the target
-database, minus an hour of overlap). Without --since: the last 90 days (backfill).
+Incremental: --since asks only for postings TheirStack discovered at/after a timestamp, one for
+all queries or per query (run_pipeline passes the stored cursors). Without it: the last 90 days.
 
 Usage:
     python etl/extract_theirstack.py --max-credits 15
-    python etl/extract_theirstack.py --since 2026-11-02T10:00:00+00:00 --max-credits 150
+    python etl/extract_theirstack.py --since 2026-11-02T10:00:00Z --max-credits 150
+    python etl/extract_theirstack.py --since cr=2026-11-02T10:00:00Z latam_remote=2026-11-01T08:00:00Z
     python etl/extract_theirstack.py --plan          # show the balance and the cap, spend nothing
 """
 
@@ -36,7 +41,7 @@ import json
 import os
 import sys
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -55,6 +60,11 @@ MAX_PAGES = 5               # ...and 5 pages per search
 REQUEST_DELAY = 7           # seconds; free plan allows 10 requests a minute
 RESERVE_CREDITS = 10        # never used by the pipeline: left for manual checks
 DEFAULT_MAX_CREDITS = 150   # per run
+# The LATAM region filter's reach is unmeasured (it may match remote jobs in one member country,
+# which we exclude): keep it from using the credits CR needs. Revisit after a few real runs.
+QUERY_MAX_CREDITS = {"latam_remote": 3}
+CURSOR_OVERLAP = timedelta(hours=1)
+TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"   # the format in TheirStack's docs
 
 # Pre-filter on titles, so credits are spent on likely target roles; etl/roles.py decides.
 TITLE_PATTERNS = [
@@ -63,12 +73,12 @@ TITLE_PATTERNS = [
     r"\b(insights|analytics) analyst", r"marketing (science )?analyst", r"analista de marketing",
     r"business (operations|ops) analyst", r"business analyst", r"analista de negocios", r"data reporting",
 ]
-LATAM_LOCATION = r"latin america|latam|latinoam|americas|south america|central america|costa rica"
+LATAM_REGION_ID = 99000012   # "LATAM" in GET /v0/catalog/locations (free)
 
 QUERIES = {
     "cr": {"job_country_code_or": ["CR"]},
     # remote postings open to Latin America; CR is covered above, US-remote by other sources
-    "latam_remote": {"workplace_types_or": ["remote"], "job_location_pattern_or": [LATAM_LOCATION],
+    "latam_remote": {"workplace_types_or": ["remote"], "job_location_or": [{"id": LATAM_REGION_ID}],
                      "job_country_code_not": ["US", "CR"]},
 }
 
@@ -79,13 +89,35 @@ def build_body(query: str, page: int, limit: int, since: str | None) -> dict:
         "job_title_pattern_or": TITLE_PATTERNS,
         "posted_at_max_age_days": LOOKBACK_DAYS,
         "property_exists_or": ["final_url"],           # employer career site / ATS page only
-        "order_by": [{"field": "date_posted", "desc": True}],
+        "order_by": [{"field": "discovered_at", "desc": False}],   # oldest first: the cursor depends on it
         "page": page,
         "limit": limit,
     }
     if since:
         body["discovered_at_gte"] = since
     return body
+
+
+def parse_since(values: list[str] | None, queries: list[str]) -> dict[str, str]:
+    """--since 2026-11-02T10:00:00Z (all queries) or cr=... latam_remote=... -> {query: timestamp}."""
+    since: dict[str, str] = {}
+    for value in values or []:
+        query, separator, timestamp = value.partition("=")
+        since.update({query: timestamp} if separator else dict.fromkeys(queries, value))
+    return since
+
+
+def discovered_times(jobs: list[dict]) -> list[datetime]:
+    return [datetime.fromisoformat(j["discovered_at"]) for j in jobs if j.get("discovered_at")]
+
+
+def next_cursor(finished: bool, discovered: list[datetime], started: datetime, since: str | None) -> str | None:
+    """Where the next run starts for one query (see the module docstring).
+    shortcut: truncated to the second and inclusive, so a stopped query re-buys its last posting (1 credit);
+    more postings in one second than a run can fetch would never advance. Not seen; use `cursor` paging if it is."""
+    if finished:
+        return (started - CURSOR_OVERLAP).strftime(TIME_FORMAT)
+    return discovered[-1].strftime(TIME_FORMAT) if discovered else since
 
 
 def credits_allowed(balance: dict, max_credits: int, reserve: int = RESERVE_CREDITS) -> int:
@@ -120,11 +152,13 @@ def post_search(session: requests.Session, body: dict) -> requests.Response:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Extract TheirStack postings (CR + LATAM-remote)")
-    parser.add_argument("--since", help="only postings discovered at/after this ISO timestamp (default: 90-day backfill)")
+    parser.add_argument("--since", nargs="+", metavar="[QUERY=]TIMESTAMP",
+                        help="only postings discovered at/after this ISO timestamp (default: 90-day backfill)")
     parser.add_argument("--max-credits", type=int, default=DEFAULT_MAX_CREDITS, help="per-run credit cap")
     parser.add_argument("--queries", nargs="+", choices=list(QUERIES), default=list(QUERIES))
     parser.add_argument("--plan", action="store_true", help="show balance and cap only; spend nothing")
     args = parser.parse_args(argv)
+    since = parse_since(args.since, args.queries)
 
     env_path = ROOT / ".env"
     if env_path.exists():
@@ -147,14 +181,14 @@ def main(argv: list[str] | None = None) -> int:
     allowed = credits_allowed(before, args.max_credits)
     print(f"TheirStack credits this month: {before.get('used_api_credits')}/{before.get('api_credits')} used; "
           f"reserve {RESERVE_CREDITS}; per-run cap {args.max_credits} -> this run may spend {allowed}"
-          f"{' | since ' + args.since if args.since else ' | backfill: last ' + str(LOOKBACK_DAYS) + ' days'}")
+          f"{' | since ' + str(since) if since else ' | backfill: last ' + str(LOOKBACK_DAYS) + ' days'}")
     if args.plan:
         return 0
 
     out_dir = RAW_DIR / date.today().isoformat()
     out_dir.mkdir(parents=True, exist_ok=True)
-    manifest = {"source": "theirstack", "date": out_dir.name, "since": args.since, "max_credits": args.max_credits,
-                "credits_allowed": allowed, "balance_before": before, "capped": False, "queries": []}
+    manifest = {"source": "theirstack", "date": out_dir.name, "since": since, "max_credits": args.max_credits,
+                "credits_allowed": allowed, "balance_before": before, "capped": False, "queries": [], "cursors": {}}
 
     spent, requests_made, errors = 0, 0, 0
     if allowed == 0:
@@ -162,23 +196,25 @@ def main(argv: list[str] | None = None) -> int:
         print("CAP REACHED: no TheirStack credits available for this run (monthly reserve or per-run cap). "
               "Skipping TheirStack today; this is not an error.")
     for query in args.queries:
+        started = datetime.now(timezone.utc)
+        discovered: list[datetime] = []
         entry = {"query": query, "status": "ok", "files": [], "n_jobs": 0,
-                 "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+                 "fetched_at": started.isoformat(timespec="seconds")}
         manifest["queries"].append(entry)
         for page in range(MAX_PAGES):
-            limit = min(PAGE_SIZE, allowed - spent)
+            limit = min(PAGE_SIZE, allowed - spent, QUERY_MAX_CREDITS.get(query, PAGE_SIZE * MAX_PAGES) - entry["n_jobs"])
             if limit <= 0:
                 entry["status"] = "capped"
                 manifest["capped"] = True
                 if allowed:
-                    print(f"[{query}] CAP REACHED after {spent} credits: older postings left for later runs "
+                    print(f"[{query}] CAP REACHED after {spent} credits: newer postings left for later runs "
                           "(not an error).")
                 break
             if requests_made:
                 time.sleep(REQUEST_DELAY)
             requests_made += 1
             try:
-                response = post_search(session, build_body(query, page, limit, args.since))
+                response = post_search(session, build_body(query, page, limit, since.get(query)))
                 response.raise_for_status()
                 jobs = response.json()["data"]
             except (requests.RequestException, ValueError, KeyError) as err:
@@ -191,14 +227,25 @@ def main(argv: list[str] | None = None) -> int:
             out_file = out_dir / f"{query}_p{page}.json"
             out_file.write_text(text, encoding="utf-8")
             spent += len(jobs)
+            discovered += discovered_times(jobs)
             entry["files"].append(out_file.name)
             entry["n_jobs"] += len(jobs)
             print(f"[{query}] page {page}: {len(jobs)} jobs -> {out_file.name}")
             if len(jobs) < limit:
                 break
         else:
-            entry["note"] = f"free-plan limit of {MAX_PAGES} pages reached; narrow the query if this repeats"
+            entry["status"] = "page_limit"       # more may be waiting: continue from the cursor next run
+            entry["note"] = f"free-plan limit of {MAX_PAGES} pages reached; the next run continues from here"
             print(f"[{query}] {entry['note']}")
+
+        finished = entry["status"] == "ok"
+        if not finished and discovered != sorted(discovered):
+            # The cursor assumes oldest-first. If TheirStack ignores the (deprecated) order_by, keep it put.
+            entry.update(status="error", error="results not oldest-first; cursor not moved")
+            errors += 1
+            print(f"[{query}] ERROR: {entry['error']}")
+            discovered = []
+        manifest["cursors"][query] = next_cursor(finished, discovered, started, since.get(query))
 
     try:
         after = get_balance(session)

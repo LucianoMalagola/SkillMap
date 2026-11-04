@@ -148,8 +148,10 @@ about 4 requests a day and each full run makes 2, so for repeated local runs pre
 TheirStack credits (200 a month on the free plan) are shared by every run: dev, main and local.
 Each run spends at most `--theirstack-max-credits` (default 15 on dev, 150 on main) and never
 goes past the month's credits minus a reserve of 10; reaching a cap is logged and is not a
-failure. Each run asks only for postings discovered since the last successful TheirStack run on
-that database (the first run on a database backfills 90 days).
+failure. Each run asks only for postings discovered after a saved position, oldest first. A run
+stopped by a cap saves the position of the last posting it fetched, so the next run (or the first
+one after the credits renew) continues from there and nothing is skipped. The first run on a
+database backfills 90 days.
 
 ## Automation (GitHub Actions)
 

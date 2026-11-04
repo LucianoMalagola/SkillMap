@@ -55,6 +55,7 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
   on tool views, directed co-occurrence, analysis views. 09 `theirstack` source, `etl_runs.api_units_used`.
   10 `jobs.open_status` (generated: 'verified' = re-checked every run, 'estimated' = TheirStack, NULL = closed),
   exposed in `v_postings`, `v_posting_skills`, and as `postings_open_verified` / `_estimated` in `v_posting_counts`.
+  11 `etl_runs.source_cursor` (TheirStack: where the next run starts, per query).
   Tables: `jobs`, `skills`, `skill_synonyms`, `job_skills`, `etl_runs`, `role_families`, `schema_migrations`.
   Views: `v_skill_demand`, `v_skill_demand_segment`, `v_skill_cooccurrence`, `v_modality_mix`,
   `v_posting_counts`, `v_weekly_postings`, `v_weekly_skill_trend`, `v_last_updated`, `v_postings`,
@@ -95,13 +96,20 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
 - **TheirStack** (added 2026-11-02, `etl/extract_theirstack.py`): Costa Rica + LATAM-remote postings for our
   roles, **only postings with a `final_url`** (employer career site / ATS page; LinkedIn/Indeed-only listings are
   not requested: Luciano's condition). Measured 2026-11-02 (90 days): 289 CR postings for our titles, 120 with a
-  final_url, 19 LATAM-remote; ~92% not in our DB. Descriptions are Markdown, full (`description_is_full` from
+  final_url; ~92% not in our DB. The 19 LATAM-remote measured that day had no `final_url` requirement and excluded
+  only the US, so they are not comparable to the production query (`final_url` required, excludes US and CR), which
+  returned 1 on its first run; how the 19 split between those two filters was not measured. Descriptions are Markdown, full (`description_is_full` from
   `normalize.looks_full`: >= 700 substantive chars, no trailing ellipsis). **Credits:** free plan 200/month,
   1 per job returned, max 5 pages x 25 per search, 10 req/min; counts are not free (1 credit if anything matches).
   The extractor reads `/v0/billing/credit-balance` (free) before each run and never goes past
   `api_credits - 10`; per-run cap `run_pipeline.THEIRSTACK_MAX_CREDITS` (dev 15, main 150). Cap reached = logged,
-  not a failure. Incremental: `--since` = last successful TheirStack run on the target - 1 h (first run = 90-day
-  backfill). Each posting is fetched once: `first_seen` = TheirStack `discovered_at`; `closed_at` -> inactive.
+  not a failure; `QUERY_MAX_CREDITS` limits `latam_remote` to 3 per run, because the reach of its region filter
+  (`job_location_or` id 99000012 = LATAM in the free `/v0/catalog/locations`; IDs, not text) is unmeasured.
+  Incremental, per query, nothing lost when stopped: results come oldest first (`order_by` discovered_at; deprecated
+  with no documented replacement, so a stopped query that gets them out of order fails loudly and keeps its cursor).
+  `etl_runs.source_cursor`: finished = run start - 1 h; stopped = last posting fetched; nothing fetched = unchanged
+  (no cursor yet = 90-day backfill). Stored only after a successful load of a run that extracted.
+  Each posting is fetched once: `first_seen` = TheirStack `discovered_at`; `closed_at` -> inactive.
   TheirStack lists one posting once per site (HPE req 1209477: 3 Workday sites + careers.hpe.com, 4 company
   spellings): `transform_load.merge_listing_copies` merges same title + same text or same 6+ digit requisition
   number in the link. Credits are shared by dev, main and local runs.
@@ -269,7 +277,9 @@ Note: Google renamed Looker Studio back to **Data Studio** in April 2026. Use "D
       A whole re-checked source returning nothing fails the run (`sources_nonempty`), but deactivates nothing.
       A single empty ATS board in an otherwise normal fetch still closes that board's postings.
 - TheirStack credits: no backfills or credit-spending experiments before the quota resets
-  (`earliest_expiration` = 2026-12-02 20:23 UTC). Open question: LATAM-remote returned 1 posting, 19 were measured.
+  (`earliest_expiration` = 2026-12-02 20:23 UTC). Open question: how the 19 LATAM-remote measured split (see Data sources).
+- One source failing (2026-11-04): each source reads, transforms and loads on its own, so an empty source or unreadable
+  raw files leave the others loaded. Their data is committed; the job still ends red and GitHub sends the failure email.
 - [ ] Data Studio dashboard (public link) + Power BI `.pbix` with "How well do I match?" page
 - [x] README: architecture, sources, three markets, data model, limitations, credits (Adzuna, Remotive, Jooble)
 - [ ] README: findings with numbers and dashboard screenshots (after the dashboards)
